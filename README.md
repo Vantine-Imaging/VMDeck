@@ -13,6 +13,8 @@ Requires macOS 15 or later. VMDeck is a Universal app and runs on both Apple
 silicon and Intel Macs. Each host needs VMware Fusion 13; the host's own
 architecture doesn't matter to VMDeck.
 
+![VMDeck's main window: a host's VMs with their state, IP address, and actions, a VM shutting down with a timer and a Power Off button, and the stats panel for the selected VM](docs/main-window.png)
+
 ## Features
 
 - **Hosts**: this Mac, plus any number of Macs over SSH, all in one window.
@@ -42,6 +44,8 @@ architecture doesn't matter to VMDeck.
    its stats in the panel on the right (⌥⌘I hides or shows it).
 
 ### Preparing a Remote Mac
+
+![The Set Up Remote Mac assistant on its Trust step, showing the remote Mac's host key fingerprint and the command to compare it with](docs/ssh-setup.png)
 
 On the Mac that runs the VMs:
 
@@ -98,6 +102,8 @@ On the Mac that runs the VMs:
   has come from the guest this boot, and *Not installed* otherwise.
 
 ### Editing Resources
+
+![The Edit sheet for a shut-down VM: vCPU and memory steppers, and a disk with its current size and a field to grow it](docs/edit-resources.png)
 
 - The VM must be shut down, not suspended. VMDeck checks this on the host
   immediately before writing anything.
