@@ -22,6 +22,7 @@ struct HelpTopic: Identifiable, Hashable {
     static let running = "running"
     static let stats = "stats"
     static let resources = "resources"
+    static let autoStart = "auto-start"
     static let troubleshooting = "troubleshooting"
     static let security = "security"
 }
@@ -102,6 +103,7 @@ extension HelpTopic {
                 "**Power Off**: cuts power immediately, like pulling the plug. Available while a shutdown is in progress, or after a shutdown fails.",
                 "**Suspend**: saves the VM's memory to disk and stops it.",
                 "**Restart**: asks the guest to restart, or resets it if VMware Tools can't.",
+                "**Connect**: opens the guest's screen. Windows guests open in your RDP client (Windows App); macOS and other guests open in Screen Sharing over VNC. The guest has to allow it: Remote Desktop in Windows, Screen Sharing in macOS. Shown only when the VM is running and has an IP address.",
             ]),
             .heading("Moving a VM from a Fusion Window to Headless"),
             .steps([
@@ -143,6 +145,20 @@ extension HelpTopic {
                 "**macOS**: Disk Utility, or `diskutil apfs resizeContainer`.",
                 "**Linux**: `growpart` and `resize2fs`, or your distribution's tools.",
             ]),
+        ]),
+
+        HelpTopic(id: autoStart, title: "Auto-Start", systemImage: "bolt.badge.clock", blocks: [
+            .paragraph("**Auto-Start** in the toolbar picks VMs that a host starts on its own, headless, whenever its user logs in. It's meant for hosts that reboot: after a power cut, an update, or a restart, the VMs come back without anyone opening Fusion."),
+            .heading("How It Works"),
+            .paragraph("VMDeck installs a small LaunchAgent for the host's user (`~/Library/LaunchAgents/com.vantine.vmdeck.autostart.plist`) that runs a script at login. The script goes through the list in order and, for each VM, **waits for its files to appear** before starting it. That's what makes it safe for VMs on an external RAID or any volume that mounts late: it waits up to the time you set (10 minutes by default), then starts the VM, pauses, and moves on. A VM that's already running is left alone; one whose files never appear is skipped and noted in the log."),
+            .heading("Automatic Login Matters"),
+            .paragraph("The agent runs at **login**, not at boot. If the host reboots and sits at the login screen, nothing starts until someone logs in. For hands-off reboots, turn on automatic login on that Mac: System Settings > Users & Groups > Automatic login. macOS doesn't allow it while FileVault is on. VMDeck checks this and warns in the Auto-Start sheet."),
+            .paragraph("Saving writes the files; the agent becomes active at the host's next login. Until then the status reads \"Installed, loads at next login\", and Run Now still works."),
+            .heading("Testing It"),
+            .paragraph("**Run Now** runs the same script immediately, so you can check it works without rebooting the host. **Show Log** shows what it did, with timestamps: which VMs it waited for, started, skipped, or couldn't start."),
+            .heading("Turning It Off"),
+            .paragraph("Untick every VM and Save. VMDeck removes the agent and its files from the host."),
+            .note("VMs started this way run headless, exactly as if you'd clicked Start in VMDeck. Fusion doesn't need to be open on the host."),
         ]),
 
         HelpTopic(id: troubleshooting, title: "Troubleshooting", systemImage: "stethoscope", blocks: [

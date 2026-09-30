@@ -84,7 +84,8 @@ final class VMStore {
             seenPaths = found.map(\.vmxPath)
             vms = found.map { d in
                 var vm = VirtualMachine(vmxPath: d.vmxPath, displayName: d.displayName, powerState: d.powerState,
-                                        config: d.config, process: d.process, volume: d.volume, pending: d.pending)
+                                        config: d.config, process: d.process, volume: d.volume, pending: d.pending,
+                                        autoStart: d.autoStart)
                 guard d.powerState == .running else { return vm }
                 vm.tools = d.tools
                 (vm.ipAddress, vm.ipSource) = Self.chooseIP(guestIP: d.guestIP, macs: d.config.macAddresses,
@@ -185,6 +186,21 @@ final class VMStore {
             if action == .stop { softStopFailed.insert(id) }
         }
         await refresh()
+    }
+
+    // MARK: - Auto-start
+
+    func autoStartStatus() async throws -> AutoStartStatus {
+        try await AutoStartManager(vmrun: vmrun).status()
+    }
+
+    func installAutoStart(_ config: AutoStartConfig) async throws {
+        try await AutoStartManager(vmrun: vmrun).install(config)
+        await refresh()
+    }
+
+    func runAutoStartNow() async throws {
+        try await AutoStartManager(vmrun: vmrun).runNow()
     }
 
     // MARK: - Resources

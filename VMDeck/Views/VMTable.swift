@@ -19,7 +19,15 @@ struct VMTable: View {
         Table(store.vms, selection: $selection) {
             TableColumn("Name") { vm in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(vm.displayName)
+                    HStack(spacing: 4) {
+                        Text(vm.displayName)
+                        if vm.autoStart {
+                            Image(systemName: "bolt.badge.clock")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .help("Starts automatically when the host starts")
+                        }
+                    }
                     Text(vm.vmxPath)
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -132,6 +140,14 @@ extension VMTable {
                             Task { await store.perform(action, on: vm) }
                         }
                     }
+                }
+                if let target = RemoteDesktop.target(for: vm) {
+                    Button { try? RemoteDesktop.open(target) } label: {
+                        buttonLabel("Connect", systemImage: "rectangle.inset.filled.and.person.filled", iconsOnly: iconsOnly)
+                    }
+                    .disabled(target.handler == nil)
+                    .help(target.help)
+                    .fixedSize()
                 }
                 if vm.powerState == .stopped {
                     Button { onEdit(vm) } label: {

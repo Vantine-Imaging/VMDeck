@@ -94,6 +94,20 @@ struct StatsInspector: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            if let target = RemoteDesktop.target(for: vm) {
+                LabeledContent("Screen") {
+                    Button("Connect", systemImage: "rectangle.inset.filled.and.person.filled") {
+                        try? RemoteDesktop.open(target)
+                    }
+                    .disabled(target.handler == nil)
+                    .help(target.help)
+                }
+                if target.handler == nil {
+                    Text(target.help).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            LabeledContent("Auto-start", value: vm.autoStart ? "At login" : "Off")
+                .help("Change this with Auto-Start in the toolbar")
             if vm.powerState == .running {
                 LabeledContent("VMware Tools", value: (vm.tools ?? .unknown).label)
                 if vm.tools == .installed {

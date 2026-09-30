@@ -14,6 +14,7 @@ struct HostDetailView: View {
     /// unsettle the sidebar. Remembered across launches.
     @AppStorage("showStats") private var showStats = true
     @State private var editing: VirtualMachine?
+    @State private var showAutoStart = false
 
     var body: some View {
         content
@@ -28,6 +29,8 @@ struct HostDetailView: View {
                     .help("Refresh now (⌘R). VMDeck also refreshes every 5 seconds.")
                     Button("Add VM Path", systemImage: "plus.rectangle.on.folder") { addingPath = true }
                         .help("Add a VM stored somewhere VMDeck doesn't look")
+                    Button("Auto-Start", systemImage: "bolt.badge.clock") { showAutoStart = true }
+                        .help("Choose VMs that start on their own when this host starts")
                     Button("Edit Host", systemImage: "pencil", action: onEdit)
                         .help("Edit this host's connection settings (⌘E)")
                     Button("Remove Host", systemImage: "trash") { confirmingRemove = true }
@@ -45,6 +48,7 @@ struct HostDetailView: View {
                 refresh: { Task { await store.refresh() } },
                 addVMPath: { addingPath = true },
                 editHost: onEdit,
+                autoStart: { showAutoStart = true },
                 toggleStats: { showStats.toggle() },
                 statsShown: showStats))
             .inspector(isPresented: $showStats) {
@@ -64,6 +68,11 @@ struct HostDetailView: View {
                         selection = id
                     }
                 }
+                // `--args -VMDeckOpenAutoStart YES` opens the Auto-Start sheet (read-only until Save).
+                if UserDefaults.standard.bool(forKey: "VMDeckOpenAutoStart") {
+                    UserDefaults.standard.removeObject(forKey: "VMDeckOpenAutoStart")
+                    showAutoStart = true
+                }
                 // `--args -VMDeckEdit "Name"` opens the resource editor (read-only until Apply).
                 if editing == nil, let name = UserDefaults.standard.string(forKey: "VMDeckEdit") {
                     editing = vms.first { $0.displayName == name }
@@ -75,6 +84,9 @@ struct HostDetailView: View {
                 Button("Remove Host", role: .destructive) { hostStore.remove(store.host.id) }
             } message: {
                 Text("VMDeck stops managing this host. Its VMs aren't touched.")
+            }
+            .sheet(isPresented: $showAutoStart) {
+                AutoStartSheet(store: store)
             }
             .sheet(item: $editing) { vm in
                 EditResourcesSheet(vm: vm, store: store)

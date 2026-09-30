@@ -31,6 +31,9 @@ architecture doesn't matter to VMDeck.
 - **IP addresses** from VMware Tools, with a fallback to the host's ARP table
   and Fusion's DHCP leases when Tools isn't running.
 - **Resource editing** for shut-down VMs: vCPUs, memory, and growing disks.
+- **Connect**: one click to the guest's screen, RDP for Windows, VNC for the rest.
+- **Auto-start**: VMs a host brings up on its own at login, waiting for slow
+  external volumes first.
 - **Built-in help**: Help > VMDeck Help (⌘?).
 
 ## Getting Started
@@ -66,6 +69,7 @@ On the Mac that runs the VMs:
 | **Power Off** | Cuts power immediately. Available during a shutdown or after one fails. Asks for confirmation. |
 | **Suspend** | Saves the VM's memory to disk and stops it. |
 | **Restart** | Asks the guest to restart; resets it if VMware Tools can't. Asks for confirmation. |
+| **Connect** | Opens the guest's screen: RDP (Windows App) for Windows guests, Screen Sharing (VNC) for the rest. Running VMs with an IP only. |
 | **Edit** | Changes vCPUs, memory, and disk sizes. Shut-down VMs only. |
 
 **To move a VM from a Fusion window to headless**, suspend it, then click
@@ -100,6 +104,22 @@ On the Mac that runs the VMs:
 - **VMware Tools** in the stats panel is *Running* when the guest is publishing
   info, *Installed, not responding* when Fusion sees Tools on disk but nothing
   has come from the guest this boot, and *Not installed* otherwise.
+
+### Auto-Start
+
+**Auto-Start** in the toolbar picks VMs a host starts on its own at login.
+VMDeck installs a per-user LaunchAgent on the host
+(`~/Library/LaunchAgents/com.vantine.vmdeck.autostart.plist`) running
+`~/Library/Application Support/VMDeck/autostart.sh`, which starts the listed
+VMs headless in order. Before starting each one it **waits for the VM's files
+to appear**, up to a configurable time (default 10 minutes), so VMs on an
+external RAID that mounts after login still come up. Already-running VMs are
+skipped; everything is logged to `~/Library/Logs/VMDeck/autostart.log`.
+**Run Now** exercises it without a reboot.
+
+Because it's a LaunchAgent it runs at *login*. A host that reboots to the
+login screen starts nothing until someone logs in; VMDeck warns when the
+host has automatic login off.
 
 ### Editing Resources
 

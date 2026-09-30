@@ -60,6 +60,8 @@ struct VirtualMachine: Identifiable, Equatable, Sendable {
     var process: VMProcessStats?
     var volume: VolumeStats?
     var pending: PendingOperation?
+    /// Listed in the host's auto-start list.
+    var autoStart = false
 
     var id: String { vmxPath }
 }

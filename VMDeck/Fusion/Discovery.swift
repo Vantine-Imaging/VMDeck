@@ -64,6 +64,7 @@ struct DiscoveredVM: Equatable, Sendable {
     /// The address VMware Tools published (guestinfo.ip), if it's a real one.
     var guestIP: String?
     var tools: ToolsState?
+    var autoStart = false
 }
 
 /// Finds every VM on a host, stopped ones included, plus live stats, in one
@@ -106,6 +107,7 @@ struct Discovery: Sendable {
     ///   NET   <ip> <mac>                                    lease or ARP entry
     ///   OP    <etime> <args…>                               a running vmrun command
     ///   GUEST <path> <ip> <toolsState>                      Tools' published IP, per running VM
+    ///   AUTO  <path>                                        in the host's auto-start list
     ///   ERR   <message>
     static func parse(_ output: String) -> Result {
         var running = Set<String>()
@@ -115,6 +117,7 @@ struct Discovery: Sendable {
         var volumes: [String: VolumeStats] = [:]
         var operations: [(args: String, elapsed: TimeInterval)] = []
         var guests: [String: (ip: String, tools: String)] = [:]
+        var autoStart = Set<String>()
         var result = Result()
         let now = Date.now
 
@@ -153,6 +156,8 @@ struct Discovery: Sendable {
                 result.host?.memoryUsedBytes = Int64(f[1])
             case "GUEST" where f.count >= 4:
                 guests[f[1]] = (f[2], f[3])
+            case "AUTO" where f.count >= 2:
+                autoStart.insert(f[1])
             case "OP" where f.count >= 3:
                 operations.append((f[2...].joined(separator: "\t"), parseElapsed(f[1]) ?? 0))
             case "NET" where f.count >= 3:
@@ -172,7 +177,8 @@ struct Discovery: Sendable {
                 displayName: record.name.isEmpty ? fallback : record.name,
                 powerState: state,
                 config: record.config,
-                volume: volumes[record.path])
+                volume: volumes[record.path],
+                autoStart: autoStart.contains(record.path))
             // vmware-vmx takes the .vmx path as its last argument.
             if state == .running {
                 vm.process = processes.first { $0.args.hasSuffix(record.path) }?.stats
@@ -304,6 +310,10 @@ struct Discovery: Sendable {
     done
     ps -Ao pid=,pcpu=,rss=,etime=,args= | grep '[v]mware-vmx' | while read -r pid cpu rss et args; do
       printf 'PS\t%s\t%s\t%s\t%s\t%s\n' "$pid" "$cpu" "$rss" "$et" "$(printf '%s' "$args" | tr '\t' ' ')"
+    done
+    al="$HOME/Library/Application Support/VMDeck/autostart.list"
+    [ -f "$al" ] && tail -n +3 "$al" | while IFS= read -r p; do
+      [ -n "$p" ] && c=$(canon "$p") && printf 'AUTO\t%s\n' "$c"
     done
     ps -Ao etime=,args= | grep -E '[v]mrun -T fusion (start|stop|suspend|reset) ' | while read -r et args; do
       printf 'OP\t%s\t%s\n' "$et" "$(printf '%s' "$args" | tr '\t' ' ')"
