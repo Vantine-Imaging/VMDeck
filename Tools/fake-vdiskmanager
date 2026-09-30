@@ -1,0 +1,21 @@
+#!/bin/sh
+# Stand-in for VMware Fusion's vmware-vdiskmanager, for tests. Supports only
+# `-x <n>MB|GB <disk.vmdk>` on text descriptors: rewrites the single RW
+# extent's sector count. Refuses disks with a parent (snapshots), like the
+# real tool, and refuses to shrink.
+[ "$1" = "-x" ] || { echo "Unsupported: $*"; exit 1; }
+size=$2 disk=$3
+case $size in
+  *GB) sectors=$(( ${size%GB} * 2097152 )) ;;
+  *MB) sectors=$(( ${size%MB} * 2048 )) ;;
+  *) echo "Bad size: $size"; exit 1 ;;
+esac
+[ -f "$disk" ] || { echo "Failed to open the disk '$disk' : The file specified is not a virtual disk"; exit 1; }
+if grep -qi '^parentFileNameHint' "$disk"; then
+  echo "Failed to expand the disk '$disk' : The operation is not supported on a disk with snapshots"; exit 1
+fi
+current=$(awk '$1 == "RW" { print $2; exit }' "$disk")
+[ "$sectors" -gt "$current" ] || { echo "The new size must be larger than the current size"; exit 1; }
+tmp=$(mktemp "$disk.XXXXXX")
+awk -v s="$sectors" '$1 == "RW" && !done { $2 = s; done = 1 } { print }' "$disk" > "$tmp" && mv "$tmp" "$disk"
+echo "Grow: 100% done."

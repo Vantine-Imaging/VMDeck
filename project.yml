@@ -1,0 +1,87 @@
+name: VMDeck
+options:
+  bundleIdPrefix: com.vantine
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+targets:
+  VMDeck:
+    type: application
+    platform: macOS
+    sources:
+      - path: VMDeck
+        # Icon artwork kept for re-exporting; the asset catalog holds what ships.
+        excludes:
+          - "Resources/AppIcon-source.*"
+    info:
+      path: VMDeck/Info.plist
+      properties:
+        NSBonjourServices: [_ssh._tcp]
+    entitlements:
+      path: VMDeck/VMDeck.entitlements
+      properties:
+        # App Sandbox MUST stay disabled: the app execs vmrun (inside
+        # VMware Fusion.app) and /usr/bin/ssh, neither of which a sandboxed
+        # process can spawn.
+        com.apple.security.app-sandbox: false
+    settings:
+      base:
+        MARKETING_VERSION: 1.0.0
+        # Build number: monotonically increasing, never reused. Bump it with
+        # every build that leaves this Mac.
+        CURRENT_PROJECT_VERSION: 3
+        # Universal in every configuration, so Debug runs on Intel too and the
+        # tests can run as x86_64 under Rosetta. ARCHS stays at the default
+        # (arm64 + x86_64).
+        ONLY_ACTIVE_ARCH: NO
+        GENERATE_INFOPLIST_FILE: true
+        PRODUCT_BUNDLE_IDENTIFIER: com.vantine.VMDeck
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        INFOPLIST_KEY_NSHumanReadableCopyright: ""
+        # Needed for the Bonjour list of nearby Macs, and for the ssh child
+        # processes, which macOS attributes to VMDeck for local network privacy.
+        # Older Fusion versions keep VMs in ~/Documents/Virtual Machines.localized.
+        INFOPLIST_KEY_NSDocumentsFolderUsageDescription: "VMDeck looks for VMware Fusion virtual machines stored in your Documents folder."
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: "VMDeck connects to Macs on your network to manage their VMware Fusion VMs, and lists nearby Macs that have Remote Login turned on."
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        DEAD_CODE_STRIPPING: true
+      configs:
+        Release:
+          # See PkgForge: injected get-task-allow blocks notarization.
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+  VMDeckTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - VMDeckTests
+      # Bundled rather than read from the repo: the repo is under ~/Documents,
+      # and the re-signed test host touching it blocks on a TCC prompt.
+      - path: Tools/fake-vmrun
+        buildPhase: resources
+      - path: Tools/fake-vdiskmanager
+        buildPhase: resources
+    dependencies:
+      - target: VMDeck
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        ONLY_ACTIVE_ARCH: NO
+        PRODUCT_BUNDLE_IDENTIFIER: com.vantine.VMDeckTests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/VMDeck.app/Contents/MacOS/VMDeck"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  VMDeck:
+    build:
+      targets:
+        VMDeck: all
+        VMDeckTests: [test]
+    test:
+      targets:
+        - VMDeckTests

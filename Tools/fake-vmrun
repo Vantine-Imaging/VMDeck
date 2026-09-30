@@ -1,0 +1,75 @@
+#!/bin/sh
+# Stand-in for VMware Fusion's vmrun, for developing and testing VMDeck on a
+# Mac without Fusion. Point a host's vmrun path at this file.
+#
+# Running VMs are tracked one path per line in $FAKE_VMRUN_STATE
+# (default ~/.fake-vmrun-running). Mimics vmrun's quirks: errors go to stdout
+# with an "Error:" prefix and exit 255. A .vmx containing
+#   fake.softStopFails = "TRUE"
+# fails soft stop the way a guest without VMware Tools does, and
+#   fake.toolsRunning = "FALSE"
+# makes readVariable/getGuestIPAddress fail and checkToolsState say
+# "installed", and
+#   fake.softStopHangs = "TRUE"
+# makes a soft stop wait until the VM is hard-stopped.
+state="${FAKE_VMRUN_STATE:-$HOME/.fake-vmrun-running}"
+touch "$state"
+[ "$1" = "-T" ] && shift 2
+cmd=$1; vmx=$2
+
+is_running() { grep -qxF "$vmx" "$state"; }
+remove() { grep -vxF "$vmx" "$state" > "$state.tmp"; mv "$state.tmp" "$state"; }
+need_vm() { [ -f "$vmx" ] || { echo "Error: Cannot open VM: $vmx, The virtual machine cannot be found"; exit 255; }; }
+need_on() { is_running || { echo "Error: The virtual machine is not powered on: $vmx"; exit 255; }; }
+
+case "$cmd" in
+  list)
+    echo "Total running VMs: $(grep -c . "$state")"
+    cat "$state" ;;
+  start)
+    need_vm
+    is_running || echo "$vmx" >> "$state"
+    rm -f "$(dirname "$vmx")"/*.vmss
+    # Like vmware-vmx: a child that outlives vmrun and keeps its stdout open.
+    (sleep 8) & ;;
+  stop)
+    need_vm; need_on
+    if [ "$3" != hard ] && grep -q '^fake.softStopFails = "TRUE"' "$vmx"; then
+      echo "Error: The VMware Tools are not running in the virtual machine: $vmx"; exit 255
+    fi
+    if [ "$3" != hard ] && grep -q '^fake.softStopHangs = "TRUE"' "$vmx"; then
+      # Like a guest that never finishes shutting down: wait until something
+      # else powers it off, then fail the way vmrun does.
+      while is_running; do sleep 0.2; done
+      echo "Error: The virtual machine is not powered on: $vmx"; exit 255
+    fi
+    remove ;;
+  suspend)
+    need_vm; need_on; remove
+    touch "${vmx%.vmx}.vmss" ;;
+  reset)
+    need_vm; need_on ;;
+  checkToolsState)
+    need_vm
+    if grep -q '^fake.toolsRunning = "FALSE"' "$vmx" || ! is_running; then echo installed; else echo running; fi ;;
+  readVariable)
+    # readVariable <vmx> guestVar ip
+    need_vm; need_on
+    [ "$3" = guestVar ] && [ "$4" = ip ] || { echo "Error: Unrecognized variable: $3 $4"; exit 255; }
+    if grep -q '^fake.guestIP = "unknown"' "$vmx"; then echo unknown; exit 0; fi
+    if grep -q '^fake.toolsRunning = "FALSE"' "$vmx"; then
+      echo "Error: The VMware Tools are not running in the virtual machine: $vmx"; exit 255
+    fi
+    n=$(printf '%s' "$vmx" | cksum | cut -d' ' -f1)
+    echo "192.168.64.$((n % 200 + 20))" ;;
+  getGuestIPAddress)
+    need_vm; need_on
+    if grep -q '^fake.guestIP = "unknown"' "$vmx"; then echo unknown; exit 0; fi
+    if grep -q '^fake.toolsRunning = "FALSE"' "$vmx"; then
+      echo "Error: The VMware Tools are not running in the virtual machine: $vmx"; exit 255
+    fi
+    n=$(printf '%s' "$vmx" | cksum | cut -d' ' -f1)
+    echo "192.168.64.$((n % 200 + 20))" ;;
+  *)
+    echo "Error: Unrecognized command: $cmd"; exit 255 ;;
+esac
