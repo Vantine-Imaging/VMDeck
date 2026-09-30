@@ -13,7 +13,7 @@ Requires macOS 15 or later. VMDeck is a Universal app and runs on both Apple
 silicon and Intel Macs. Each host needs VMware Fusion 13; the host's own
 architecture doesn't matter to VMDeck.
 
-![VMDeck's main window: a host's VMs with their state, IP address, and actions, a VM shutting down with a timer and a Power Off button, and the stats panel for the selected VM](docs/main-window.png)
+![VMDeck's main window: a host's VMs with their state, IP address, and actions including Connect, a VM shutting down with a timer and a Power Off button, auto-start badges, and the stats panel for the selected VM](docs/main-window.png)
 
 ## Features
 
@@ -106,6 +106,8 @@ On the Mac that runs the VMs:
   has come from the guest this boot, and *Not installed* otherwise.
 
 ### Auto-Start
+
+![The Auto-Start sheet: toggles for each VM, wait-for-volumes and pause settings, and a warning that automatic login is off on the host](docs/auto-start.png)
 
 **Auto-Start** in the toolbar picks VMs a host starts on its own at login.
 VMDeck installs a per-user LaunchAgent on the host
