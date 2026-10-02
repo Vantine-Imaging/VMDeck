@@ -34,7 +34,7 @@ struct HostCommandActions {
     var refresh: () -> Void
     var addVMPath: () -> Void
     var editHost: () -> Void
-    var autoStart: () -> Void
+    var automation: () -> Void
     var toggleStats: () -> Void
     var statsShown: Bool
 }
@@ -74,7 +74,7 @@ struct VMDeckCommands: Commands {
             Button("Edit Host") { host?.editHost() }
                 .keyboardShortcut("e")
                 .disabled(host == nil)
-            Button("Auto-Start") { host?.autoStart() }
+            Button("Automation") { host?.automation() }
                 .disabled(host == nil)
         }
 

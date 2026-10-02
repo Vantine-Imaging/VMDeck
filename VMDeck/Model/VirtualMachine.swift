@@ -65,6 +65,14 @@ struct VirtualMachine: Identifiable, Equatable, Sendable {
     /// The host's saved restart schedule for this VM, enabled or not.
     var restartSchedule: RestartSchedule?
 
+    /// "Starts at login, restarts daily at 3:00", or "Off".
+    var automationLabel: String {
+        var parts: [String] = []
+        if autoStart { parts.append("Starts at login") }
+        if let s = restartSchedule, s.enabled { parts.append("Restarts \(s.sentenceLabel)") }
+        return parts.isEmpty ? "Off" : parts.joined(separator: ", ")
+    }
+
     var id: String { vmxPath }
 }
 

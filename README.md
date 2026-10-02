@@ -13,7 +13,7 @@ Requires macOS 15 or later. VMDeck is a Universal app and runs on both Apple
 silicon and Intel Macs. Each host needs VMware Fusion 13; the host's own
 architecture doesn't matter to VMDeck.
 
-![VMDeck's main window: a host's VMs with their state, IP address, and actions including Connect, a VM shutting down with a timer and a Power Off button, auto-start badges, and the stats panel for the selected VM](docs/main-window.png)
+![VMDeck's main window: a host's VMs with their state, IP address, and actions including Connect, a VM shutting down with a timer and a Power Off button, automation badges, and the stats panel for the selected VM](docs/main-window.png)
 
 ## Features
 
@@ -32,11 +32,9 @@ architecture doesn't matter to VMDeck.
   and Fusion's DHCP leases when Tools isn't running.
 - **Resource editing** for shut-down VMs: vCPUs, memory, and growing disks.
 - **Connect**: one click to the guest's screen, RDP for Windows, VNC for the rest.
-- **Auto-start**: VMs a host brings up on its own at login, waiting for slow
-  external volumes first.
-- **Scheduled restarts**: recurring per-VM restarts (time and weekdays) via
-  per-VM LaunchAgents, with a guest restart first and a bounded shutdown as
-  the fallback.
+- **Automation**, per VM: start at login (waiting for slow external volumes
+  first) and recurring restarts on a time and weekdays, with a guest restart
+  first and a bounded shutdown as the fallback.
 - **Built-in help**: Help > VMDeck Help (⌘?).
 
 ## Getting Started
@@ -108,36 +106,39 @@ On the Mac that runs the VMs:
   info, *Installed, not responding* when Fusion sees Tools on disk but nothing
   has come from the guest this boot, and *Not installed* otherwise.
 
-### Auto-Start
+### Automation
 
-![The Auto-Start sheet: toggles for each VM, wait-for-volumes and pause settings, and a warning that automatic login is off on the host](docs/auto-start.png)
+![A VM's Automation sheet: a Start at login switch, a Restart on a schedule switch with a time and weekday buttons, and the saved status with the VM's recent log lines](docs/automation.png)
 
-**Auto-Start** in the toolbar picks VMs a host starts on its own at login.
-VMDeck installs a per-user LaunchAgent on the host
+Each VM can start at login on its host and restart on a schedule. Select the
+VM and click **Edit** next to Automation in the stats panel, or open
+**Automation** in the toolbar for every VM on the host plus the host-wide
+timings (wait for volumes, pause between starts, shutdown wait).
+
+![The host's Automation sheet: each VM with what it does on its own, the three timing settings, and the agents' status](docs/automation-host.png)
+
+**Start at login** installs a per-user LaunchAgent on the host
 (`~/Library/LaunchAgents/com.vantine.vmdeck.autostart.plist`) running
 `~/Library/Application Support/VMDeck/autostart.sh`, which starts the listed
 VMs headless in order. Before starting each one it **waits for the VM's files
 to appear**, up to a configurable time (default 10 minutes), so VMs on an
 external RAID that mounts after login still come up. Already-running VMs are
 skipped; everything is logged to `~/Library/Logs/VMDeck/autostart.log`.
-**Run Now** exercises it without a reboot.
+**Run Auto-Start Now** exercises it without a reboot.
 
-Because it's a LaunchAgent it runs at *login*. A host that reboots to the
+**Restart on a schedule** gives a VM its own LaunchAgent
+(`~/Library/LaunchAgents/com.vantine.vmdeck.restart.<id>.plist`, one calendar
+interval per chosen day, in the host's local time) running
+`~/Library/Application Support/VMDeck/restart.sh`. At the scheduled time the
+script asks the guest to restart through VMware Tools; if the guest can't, it
+shuts the VM down (bounded wait, then Power Off) and starts it headless again.
+VMs that aren't running are left alone. Everything is logged to
+`~/Library/Logs/VMDeck/restart.log`. **Restart Now** runs the same steps
+immediately.
+
+Both run in the host user's *login session*. A host that reboots to the
 login screen starts nothing until someone logs in; VMDeck warns when the
 host has automatic login off.
-
-### Scheduled Restarts
-
-From the stats panel, **Schedule > Edit** gives a VM a recurring
-restart: a time of day on chosen weekdays, in the host's local time. Each
-scheduled VM gets its own LaunchAgent on the host
-(`~/Library/LaunchAgents/com.vantine.vmdeck.restart.<id>.plist`, one calendar
-interval per day) running `~/Library/Application Support/VMDeck/restart.sh`.
-At the scheduled time the script asks the guest to restart through VMware
-Tools; if the guest can't, it shuts the VM down (bounded wait, then Power
-Off) and starts it headless again. VMs that aren't running are left alone.
-Everything is logged to `~/Library/Logs/VMDeck/restart.log`. **Restart Now**
-runs the same steps immediately.
 
 ### Editing Resources
 
@@ -308,6 +309,8 @@ Debug builds accept these, for screenshots and manual testing:
 | `-VMDeckSetupHost <host>` `-VMDeckSetupPort <n>` | Prefill it and run the connection check |
 | `-VMDeckSelect "<VM name>"` | Select a VM, which opens the stats panel |
 | `-VMDeckEdit "<VM name>"` | Open the resource editor for a VM |
+| `-VMDeckAutomate "<VM name>"` | Open a VM's Automation sheet |
+| `-VMDeckOpenAutomation YES` | Open the host's Automation sheet |
 | `-VMDeckOpenHelp <topic-id>` | Open the Help window on a topic |
 
 For example:

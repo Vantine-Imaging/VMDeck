@@ -14,8 +14,8 @@ struct HostDetailView: View {
     /// unsettle the sidebar. Remembered across launches.
     @AppStorage("showStats") private var showStats = true
     @State private var editing: VirtualMachine?
-    @State private var showAutoStart = false
-    @State private var scheduling: VirtualMachine?
+    @State private var showAutomation = false
+    @State private var automating: VirtualMachine?
 
     var body: some View {
         content
@@ -30,8 +30,8 @@ struct HostDetailView: View {
                     .help("Refresh now (⌘R). VMDeck also refreshes every 5 seconds.")
                     Button("Add VM Path", systemImage: "plus.rectangle.on.folder") { addingPath = true }
                         .help("Add a VM stored somewhere VMDeck doesn't look")
-                    Button("Auto-Start", systemImage: "bolt.badge.clock") { showAutoStart = true }
-                        .help("Choose VMs that start on their own when this host starts")
+                    Button("Automation", systemImage: "clock.badge.checkmark") { showAutomation = true }
+                        .help("What this host's VMs do on their own: start at login, restart on a schedule")
                     Button("Edit Host", systemImage: "pencil", action: onEdit)
                         .help("Edit this host's connection settings (⌘E)")
                     Button("Remove Host", systemImage: "trash") { confirmingRemove = true }
@@ -49,11 +49,11 @@ struct HostDetailView: View {
                 refresh: { Task { await store.refresh() } },
                 addVMPath: { addingPath = true },
                 editHost: onEdit,
-                autoStart: { showAutoStart = true },
+                automation: { showAutomation = true },
                 toggleStats: { showStats.toggle() },
                 statsShown: showStats))
             .inspector(isPresented: $showStats) {
-                StatsInspector(store: store, selection: selection, onEdit: { editing = $0 }, onSchedule: { scheduling = $0 })
+                StatsInspector(store: store, selection: selection, onEdit: { editing = $0 }, onAutomate: { automating = $0 })
                     .inspectorColumnWidth(min: 250, ideal: 290, max: 420)
             }
             #if DEBUG
@@ -69,15 +69,15 @@ struct HostDetailView: View {
                         selection = id
                     }
                 }
-                // `--args -VMDeckOpenAutoStart YES` opens the Auto-Start sheet (read-only until Save).
-                if UserDefaults.standard.bool(forKey: "VMDeckOpenAutoStart") {
-                    UserDefaults.standard.removeObject(forKey: "VMDeckOpenAutoStart")
-                    showAutoStart = true
+                // `--args -VMDeckOpenAutomation YES` opens the host's Automation sheet (read-only until Save).
+                if UserDefaults.standard.bool(forKey: "VMDeckOpenAutomation") {
+                    UserDefaults.standard.removeObject(forKey: "VMDeckOpenAutomation")
+                    showAutomation = true
                 }
-                // `--args -VMDeckSchedule "Name"` opens the restart-schedule sheet (read-only until Save).
-                if scheduling == nil, let name = UserDefaults.standard.string(forKey: "VMDeckSchedule") {
-                    scheduling = vms.first { $0.displayName == name }
-                    UserDefaults.standard.removeObject(forKey: "VMDeckSchedule")
+                // `--args -VMDeckAutomate "Name"` opens a VM's Automation sheet (read-only until Save).
+                if automating == nil, let name = UserDefaults.standard.string(forKey: "VMDeckAutomate") {
+                    automating = vms.first { $0.displayName == name }
+                    UserDefaults.standard.removeObject(forKey: "VMDeckAutomate")
                 }
                 // `--args -VMDeckEdit "Name"` opens the resource editor (read-only until Apply).
                 if editing == nil, let name = UserDefaults.standard.string(forKey: "VMDeckEdit") {
@@ -91,11 +91,11 @@ struct HostDetailView: View {
             } message: {
                 Text("VMDeck stops managing this host. Its VMs aren't touched.")
             }
-            .sheet(isPresented: $showAutoStart) {
-                AutoStartSheet(store: store)
+            .sheet(isPresented: $showAutomation) {
+                AutomationOverviewSheet(store: store)
             }
-            .sheet(item: $scheduling) { vm in
-                ScheduleSheet(vm: vm, store: store)
+            .sheet(item: $automating) { vm in
+                AutomationSheet(vm: vm, store: store)
             }
             .sheet(item: $editing) { vm in
                 EditResourcesSheet(vm: vm, store: store)

@@ -11,6 +11,8 @@ private final class Token {}
         #expect(RestartSchedule(hour: 4, minute: 5, weekdays: [0, 6]).label == "Weekends at 4:05")
         #expect(RestartSchedule(hour: 4, minute: 0, weekdays: [1, 3, 5]).label == "Mon, Wed, Fri at 4:00")
         #expect(RestartSchedule(hour: 4, minute: 0, weekdays: []).label == "Never")
+        #expect(RestartSchedule(hour: 3, minute: 0).sentenceLabel == "daily at 3:00")
+        #expect(RestartSchedule(hour: 4, minute: 30, weekdays: [0]).sentenceLabel == "Sun at 4:30")
     }
 
     @Test func nextRunHonorsDaysAndTime() throws {
@@ -171,5 +173,27 @@ private final class Token {}
         log = try await runRestart(off)
         #expect(log.contains("Off: not running, skipped"))
         #expect(!(try await vmrun.list()).contains(off))
+    }
+}
+
+@Suite struct AutomationStatusTests {
+    @Test func combinesBothStatusesFromOneScript() async throws {
+        let fm = FileManager.default
+        let home = URL(fileURLWithPath: NSTemporaryDirectory()).appending(path: "vmdeck-auto-status-\(UUID().uuidString)")
+        try fm.createDirectory(at: home.appending(path: "Library/Application Support/VMDeck"), withIntermediateDirectories: true)
+        try fm.createDirectory(at: home.appending(path: "Library/LaunchAgents"), withIntermediateDirectories: true)
+        let support = home.appending(path: "Library/Application Support/VMDeck")
+        try "600 15\n/x/vmrun\n/a/A.vmx\n".write(to: support.appending(path: "autostart.list"), atomically: true, encoding: .utf8)
+        try "/x/vmrun\n300\n3\t0\t0,6\t1\t/a/A.vmx\n".write(to: support.appending(path: "restart.list"), atomically: true, encoding: .utf8)
+        var env = ProcessInfo.processInfo.environment
+        env["HOME"] = home.path
+        let r = try await LocalRunner(environment: env).run(["/bin/sh", "-c", AutomationManager.statusScript, "t"], timeout: .seconds(10))
+        let s = AutomationManager.parseStatus(r.stdout)
+        #expect(!s.autoStart.installed)
+        #expect(s.autoStart.config == AutoStartConfig(vmxPaths: ["/a/A.vmx"], waitSeconds: 600, staggerSeconds: 15))
+        #expect(s.restarts.shutdownWaitSeconds == 300)
+        #expect(s.restarts.schedules["/a/A.vmx"] == RestartSchedule(hour: 3, minute: 0, weekdays: [0, 6]))
+        #expect(s.summary(for: "/a/A.vmx") == "Starts at login, Restarts weekends at 3:00")
+        #expect(s.summary(for: "/b/B.vmx") == "Off")
     }
 }

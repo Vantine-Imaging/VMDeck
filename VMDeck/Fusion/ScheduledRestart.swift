@@ -26,6 +26,12 @@ struct RestartSchedule: Equatable, Sendable {
         return "\(days) at \(timeLabel)"
     }
 
+    /// `label` for mid-sentence use: "daily at 3:00", but "Sun at 4:30".
+    var sentenceLabel: String {
+        let l = label
+        return ["Daily", "Weekdays", "Weekends", "Never"].contains(where: { l.hasPrefix($0) }) ? l.lowercased() : l
+    }
+
     /// The next time this fires after `date`, in `calendar`'s time zone.
     /// It's a preview: the host's launchd decides for real, in its own zone.
     func nextRun(after date: Date = .now, calendar: Calendar = .current) -> Date? {

@@ -22,8 +22,7 @@ struct HelpTopic: Identifiable, Hashable {
     static let running = "running"
     static let stats = "stats"
     static let resources = "resources"
-    static let autoStart = "auto-start"
-    static let schedule = "schedule"
+    static let automation = "automation"
     static let troubleshooting = "troubleshooting"
     static let security = "security"
 }
@@ -148,33 +147,29 @@ extension HelpTopic {
             ]),
         ]),
 
-        HelpTopic(id: autoStart, title: "Auto-Start", systemImage: "bolt.badge.clock", blocks: [
-            .paragraph("**Auto-Start** in the toolbar picks VMs that a host starts on its own, headless, whenever its user logs in. It's meant for hosts that reboot: after a power cut, an update, or a restart, the VMs come back without anyone opening Fusion."),
-            .heading("How It Works"),
-            .paragraph("VMDeck installs a small LaunchAgent for the host's user (`~/Library/LaunchAgents/com.vantine.vmdeck.autostart.plist`) that runs a script at login. The script goes through the list in order and, for each VM, **waits for its files to appear** before starting it. That's what makes it safe for VMs on an external RAID or any volume that mounts late: it waits up to the time you set (10 minutes by default), then starts the VM, pauses, and moves on. A VM that's already running is left alone; one whose files never appear is skipped and noted in the log."),
-            .heading("Automatic Login Matters"),
-            .paragraph("The agent runs at **login**, not at boot. If the host reboots and sits at the login screen, nothing starts until someone logs in. For hands-off reboots, turn on automatic login on that Mac: System Settings > Users & Groups > Automatic login. macOS doesn't allow it while FileVault is on. VMDeck checks this and warns in the Auto-Start sheet."),
-            .paragraph("Saving writes the files; the agent becomes active at the host's next login. Until then the status reads \"Installed, loads at next login\", and Run Now still works."),
-            .heading("Testing It"),
-            .paragraph("**Run Now** runs the same script immediately, so you can check it works without rebooting the host. **Show Log** shows what it did, with timestamps: which VMs it waited for, started, skipped, or couldn't start."),
-            .heading("Turning It Off"),
-            .paragraph("Untick every VM and Save. VMDeck removes the agent and its files from the host."),
-            .note("VMs started this way run headless, exactly as if you'd clicked Start in VMDeck. Fusion doesn't need to be open on the host."),
-        ]),
-
-        HelpTopic(id: schedule, title: "Scheduled Restarts", systemImage: "clock.arrow.2.circlepath", blocks: [
-            .paragraph("A VM can restart itself on a recurring schedule: a time of day on the days you choose, in the host's local time. Open it from the stats panel: **Schedule > Edit**."),
-            .heading("What Happens at That Time"),
+        HelpTopic(id: automation, title: "Automation", systemImage: "clock.badge.checkmark", blocks: [
+            .paragraph("Each VM can do two things on its own: **start at login** on its host, and **restart on a schedule**. Both are set per VM: select the VM and click **Edit** next to Automation in the stats panel, or open **Automation** in the toolbar to see every VM on the host at once, with the host-wide timings."),
+            .heading("Start at Login"),
+            .paragraph("Meant for hosts that reboot: after a power cut, an update, or a restart, the VMs come back headless without anyone opening Fusion. VMDeck installs one LaunchAgent for the host's user (`~/Library/LaunchAgents/com.vantine.vmdeck.autostart.plist`) that runs a script at login. The script goes through the login VMs in the order shown and, for each one, **waits for its files to appear** before starting it. That's what makes it safe for VMs on an external RAID or any volume that mounts late: it waits up to the time you set (10 minutes by default), starts the VM, pauses, and moves on. A VM that's already running is left alone; one whose files never appear is skipped and noted in the log."),
+            .paragraph("Saving writes the files; the agent becomes active at the host's next login. Until then the status reads \"Installed, loads at next login\", and **Run Auto-Start Now** in the toolbar sheet runs it immediately, so you can check it works without rebooting the host."),
+            .heading("Scheduled Restart"),
+            .paragraph("A time of day on the days you choose, in the host's local time. At that time:"),
             .steps([
                 "The guest is asked to restart through VMware Tools (`vmrun reset soft`). For most guests that's all, and the VM keeps running headless.",
-                "If the guest can't do that (Tools not responding), VMDeck shuts the VM down instead, waiting up to the time you set for the guest to power off.",
+                "If the guest can't do that (Tools not responding), VMDeck shuts the VM down instead, waiting up to the host's shutdown time for the guest to power off.",
                 "If it still hasn't powered off by then, the VM is powered off like pulling the plug.",
                 "The VM is started again headless.",
             ]),
-            .paragraph("A VM that isn't running at the scheduled time is left alone. Everything is logged to `~/Library/Logs/VMDeck/restart.log` on the host; the sheet shows the VM's recent lines."),
-            .heading("How It Works"),
-            .paragraph("Each scheduled VM gets its own LaunchAgent on the host (`~/Library/LaunchAgents/com.vantine.vmdeck.restart.<id>.plist`) with a calendar interval per chosen day, running `~/Library/Application Support/VMDeck/restart.sh`. Agents are loaded as soon as you save; a calendar agent doesn't run on load, only at its time. Like auto-start, this runs in the host user's login session, so the host needs to stay logged in (automatic login after reboots)."),
-            .note("Restart Now runs the same steps immediately, so you can see the method work before trusting the schedule. It does restart the VM."),
+            .paragraph("A VM that isn't running at the scheduled time is left alone. Each scheduled VM gets its own LaunchAgent on the host (`~/Library/LaunchAgents/com.vantine.vmdeck.restart.<id>.plist`) with a calendar interval per chosen day. These agents are loaded as soon as you save; a calendar agent doesn't run on load, only at its time."),
+            .note("**Restart Now** in the VM's sheet runs the same steps immediately, so you can see the method work before trusting the schedule. It does restart the VM."),
+            .heading("Timing"),
+            .paragraph("Three settings apply to the whole host, under **Automation** in the toolbar: how long to wait for a VM's volume at login, the pause between starts, and how long a scheduled restart lets a guest shut down before powering it off."),
+            .heading("Automatic Login Matters"),
+            .paragraph("Both run in the host user's **login session**, not at boot. If the host reboots and sits at the login screen, nothing starts or restarts until someone logs in. For hands-off reboots, turn on automatic login on that Mac: System Settings > Users & Groups > Automatic login. macOS doesn't allow it while FileVault is on. VMDeck checks this and warns in both sheets."),
+            .heading("Logs and Files"),
+            .paragraph("Scripts and lists live in `~/Library/Application Support/VMDeck/` on the host (`autostart.sh`, `autostart.list`, `restart.sh`, `restart.list`); logs in `~/Library/Logs/VMDeck/`. A VM's sheet shows its own recent log lines; **Show Log** in the toolbar sheet shows everything."),
+            .heading("Turning It Off"),
+            .paragraph("Turn both switches off in the VM's sheet and Save. When no VM starts at login any more, the login agent and its files are removed from the host."),
         ]),
 
         HelpTopic(id: troubleshooting, title: "Troubleshooting", systemImage: "stethoscope", blocks: [

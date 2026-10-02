@@ -25,13 +25,13 @@ struct VMTable: View {
                             Image(systemName: "bolt.badge.clock")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                                .help("Starts automatically when the host starts")
+                                .help("Starts at login on the host")
                         }
                         if let s = vm.restartSchedule, s.enabled {
                             Image(systemName: "clock.arrow.2.circlepath")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                                .help("Restarts \(s.label.lowercased()) (host's local time)")
+                                .help("Restarts \(s.sentenceLabel) (host's local time)")
                         }
                     }
                     Text(vm.vmxPath)

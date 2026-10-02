@@ -205,6 +205,11 @@ final class VMStore {
 
     // MARK: - Scheduled restarts
 
+    /// Auto-start and schedules together, one round trip.
+    func automationStatus() async throws -> AutomationStatus {
+        try await AutomationManager(vmrun: vmrun).status()
+    }
+
     func scheduledRestartStatus() async throws -> ScheduledRestartStatus {
         try await ScheduledRestartManager(vmrun: vmrun).status()
     }
