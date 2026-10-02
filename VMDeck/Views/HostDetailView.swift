@@ -15,6 +15,7 @@ struct HostDetailView: View {
     @AppStorage("showStats") private var showStats = true
     @State private var editing: VirtualMachine?
     @State private var showAutoStart = false
+    @State private var scheduling: VirtualMachine?
 
     var body: some View {
         content
@@ -52,7 +53,7 @@ struct HostDetailView: View {
                 toggleStats: { showStats.toggle() },
                 statsShown: showStats))
             .inspector(isPresented: $showStats) {
-                StatsInspector(store: store, selection: selection, onEdit: { editing = $0 })
+                StatsInspector(store: store, selection: selection, onEdit: { editing = $0 }, onSchedule: { scheduling = $0 })
                     .inspectorColumnWidth(min: 250, ideal: 290, max: 420)
             }
             #if DEBUG
@@ -73,6 +74,11 @@ struct HostDetailView: View {
                     UserDefaults.standard.removeObject(forKey: "VMDeckOpenAutoStart")
                     showAutoStart = true
                 }
+                // `--args -VMDeckSchedule "Name"` opens the restart-schedule sheet (read-only until Save).
+                if scheduling == nil, let name = UserDefaults.standard.string(forKey: "VMDeckSchedule") {
+                    scheduling = vms.first { $0.displayName == name }
+                    UserDefaults.standard.removeObject(forKey: "VMDeckSchedule")
+                }
                 // `--args -VMDeckEdit "Name"` opens the resource editor (read-only until Apply).
                 if editing == nil, let name = UserDefaults.standard.string(forKey: "VMDeckEdit") {
                     editing = vms.first { $0.displayName == name }
@@ -87,6 +93,9 @@ struct HostDetailView: View {
             }
             .sheet(isPresented: $showAutoStart) {
                 AutoStartSheet(store: store)
+            }
+            .sheet(item: $scheduling) { vm in
+                ScheduleSheet(vm: vm, store: store)
             }
             .sheet(item: $editing) { vm in
                 EditResourcesSheet(vm: vm, store: store)

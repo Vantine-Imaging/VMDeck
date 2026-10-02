@@ -34,6 +34,9 @@ architecture doesn't matter to VMDeck.
 - **Connect**: one click to the guest's screen, RDP for Windows, VNC for the rest.
 - **Auto-start**: VMs a host brings up on its own at login, waiting for slow
   external volumes first.
+- **Scheduled restarts**: recurring per-VM restarts (time and weekdays) via
+  per-VM LaunchAgents, with a guest restart first and a bounded shutdown as
+  the fallback.
 - **Built-in help**: Help > VMDeck Help (⌘?).
 
 ## Getting Started
@@ -122,6 +125,19 @@ skipped; everything is logged to `~/Library/Logs/VMDeck/autostart.log`.
 Because it's a LaunchAgent it runs at *login*. A host that reboots to the
 login screen starts nothing until someone logs in; VMDeck warns when the
 host has automatic login off.
+
+### Scheduled Restarts
+
+From the stats panel, **Schedule > Edit** gives a VM a recurring
+restart: a time of day on chosen weekdays, in the host's local time. Each
+scheduled VM gets its own LaunchAgent on the host
+(`~/Library/LaunchAgents/com.vantine.vmdeck.restart.<id>.plist`, one calendar
+interval per day) running `~/Library/Application Support/VMDeck/restart.sh`.
+At the scheduled time the script asks the guest to restart through VMware
+Tools; if the guest can't, it shuts the VM down (bounded wait, then Power
+Off) and starts it headless again. VMs that aren't running are left alone.
+Everything is logged to `~/Library/Logs/VMDeck/restart.log`. **Restart Now**
+runs the same steps immediately.
 
 ### Editing Resources
 

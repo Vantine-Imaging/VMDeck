@@ -57,6 +57,7 @@ struct StatsInspector: View {
     let store: VMStore
     let selection: VirtualMachine.ID?
     let onEdit: (VirtualMachine) -> Void
+    let onSchedule: (VirtualMachine) -> Void
 
     private var vm: VirtualMachine? {
         selection.flatMap { id in store.vms.first { $0.id == id } }
@@ -108,6 +109,13 @@ struct StatsInspector: View {
             }
             LabeledContent("Auto-start", value: vm.autoStart ? "At login" : "Off")
                 .help("Change this with Auto-Start in the toolbar")
+            LabeledContent("Schedule") {
+                HStack(spacing: 8) {
+                    Text(vm.restartSchedule.flatMap { $0.enabled ? $0.label : nil } ?? "Off")
+                    Button("Edit", systemImage: "clock.arrow.2.circlepath") { onSchedule(vm) }
+                        .help("Restart this VM on a recurring schedule")
+                }
+            }
             if vm.powerState == .running {
                 LabeledContent("VMware Tools", value: (vm.tools ?? .unknown).label)
                 if vm.tools == .installed {

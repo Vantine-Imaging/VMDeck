@@ -23,6 +23,7 @@ struct HelpTopic: Identifiable, Hashable {
     static let stats = "stats"
     static let resources = "resources"
     static let autoStart = "auto-start"
+    static let schedule = "schedule"
     static let troubleshooting = "troubleshooting"
     static let security = "security"
 }
@@ -159,6 +160,21 @@ extension HelpTopic {
             .heading("Turning It Off"),
             .paragraph("Untick every VM and Save. VMDeck removes the agent and its files from the host."),
             .note("VMs started this way run headless, exactly as if you'd clicked Start in VMDeck. Fusion doesn't need to be open on the host."),
+        ]),
+
+        HelpTopic(id: schedule, title: "Scheduled Restarts", systemImage: "clock.arrow.2.circlepath", blocks: [
+            .paragraph("A VM can restart itself on a recurring schedule: a time of day on the days you choose, in the host's local time. Open it from the stats panel: **Schedule > Edit**."),
+            .heading("What Happens at That Time"),
+            .steps([
+                "The guest is asked to restart through VMware Tools (`vmrun reset soft`). For most guests that's all, and the VM keeps running headless.",
+                "If the guest can't do that (Tools not responding), VMDeck shuts the VM down instead, waiting up to the time you set for the guest to power off.",
+                "If it still hasn't powered off by then, the VM is powered off like pulling the plug.",
+                "The VM is started again headless.",
+            ]),
+            .paragraph("A VM that isn't running at the scheduled time is left alone. Everything is logged to `~/Library/Logs/VMDeck/restart.log` on the host; the sheet shows the VM's recent lines."),
+            .heading("How It Works"),
+            .paragraph("Each scheduled VM gets its own LaunchAgent on the host (`~/Library/LaunchAgents/com.vantine.vmdeck.restart.<id>.plist`) with a calendar interval per chosen day, running `~/Library/Application Support/VMDeck/restart.sh`. Agents are loaded as soon as you save; a calendar agent doesn't run on load, only at its time. Like auto-start, this runs in the host user's login session, so the host needs to stay logged in (automatic login after reboots)."),
+            .note("Restart Now runs the same steps immediately, so you can see the method work before trusting the schedule. It does restart the VM."),
         ]),
 
         HelpTopic(id: troubleshooting, title: "Troubleshooting", systemImage: "stethoscope", blocks: [

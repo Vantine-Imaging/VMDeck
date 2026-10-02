@@ -27,6 +27,12 @@ struct VMTable: View {
                                 .foregroundStyle(.secondary)
                                 .help("Starts automatically when the host starts")
                         }
+                        if let s = vm.restartSchedule, s.enabled {
+                            Image(systemName: "clock.arrow.2.circlepath")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .help("Restarts \(s.label.lowercased()) (host's local time)")
+                        }
                     }
                     Text(vm.vmxPath)
                         .font(.caption)

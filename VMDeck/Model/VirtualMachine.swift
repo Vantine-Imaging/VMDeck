@@ -62,6 +62,8 @@ struct VirtualMachine: Identifiable, Equatable, Sendable {
     var pending: PendingOperation?
     /// Listed in the host's auto-start list.
     var autoStart = false
+    /// The host's saved restart schedule for this VM, enabled or not.
+    var restartSchedule: RestartSchedule?
 
     var id: String { vmxPath }
 }

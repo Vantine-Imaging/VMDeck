@@ -11,7 +11,9 @@
 # makes readVariable/getGuestIPAddress fail and checkToolsState say
 # "installed", and
 #   fake.softStopHangs = "TRUE"
-# makes a soft stop wait until the VM is hard-stopped.
+# makes a soft stop wait until the VM is hard-stopped, and
+#   fake.resetFails = "TRUE"
+# makes a soft reset fail the way a guest without Tools does.
 state="${FAKE_VMRUN_STATE:-$HOME/.fake-vmrun-running}"
 touch "$state"
 [ "$1" = "-T" ] && shift 2
@@ -48,7 +50,10 @@ case "$cmd" in
     need_vm; need_on; remove
     touch "${vmx%.vmx}.vmss" ;;
   reset)
-    need_vm; need_on ;;
+    need_vm; need_on
+    if grep -q '^fake.resetFails = "TRUE"' "$vmx"; then
+      echo "Error: The VMware Tools are not running in the virtual machine: $vmx"; exit 255
+    fi ;;
   checkToolsState)
     need_vm
     if grep -q '^fake.toolsRunning = "FALSE"' "$vmx" || ! is_running; then echo installed; else echo running; fi ;;

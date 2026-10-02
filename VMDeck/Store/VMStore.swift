@@ -85,7 +85,7 @@ final class VMStore {
             vms = found.map { d in
                 var vm = VirtualMachine(vmxPath: d.vmxPath, displayName: d.displayName, powerState: d.powerState,
                                         config: d.config, process: d.process, volume: d.volume, pending: d.pending,
-                                        autoStart: d.autoStart)
+                                        autoStart: d.autoStart, restartSchedule: d.restartSchedule)
                 guard d.powerState == .running else { return vm }
                 vm.tools = d.tools
                 (vm.ipAddress, vm.ipSource) = Self.chooseIP(guestIP: d.guestIP, macs: d.config.macAddresses,
@@ -201,6 +201,21 @@ final class VMStore {
 
     func runAutoStartNow() async throws {
         try await AutoStartManager(vmrun: vmrun).runNow()
+    }
+
+    // MARK: - Scheduled restarts
+
+    func scheduledRestartStatus() async throws -> ScheduledRestartStatus {
+        try await ScheduledRestartManager(vmrun: vmrun).status()
+    }
+
+    func installScheduledRestarts(_ schedules: [String: RestartSchedule], shutdownWaitSeconds: Int) async throws {
+        try await ScheduledRestartManager(vmrun: vmrun).install(schedules, shutdownWaitSeconds: shutdownWaitSeconds)
+        await refresh()
+    }
+
+    func restartNow(_ vm: VirtualMachine) async throws {
+        try await ScheduledRestartManager(vmrun: vmrun).restartNow(vm.id)
     }
 
     // MARK: - Resources
