@@ -171,11 +171,10 @@ struct StatsInspector: View {
             Text("Configuration")
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Button("Edit Resources", systemImage: "slider.horizontal.3") { onEdit(vm) }
-                        .disabled(vm.powerState != .stopped)
-                    Button("Settings", systemImage: "list.bullet.rectangle") { onSettings(vm) }
-                        .help("Queue .vmx settings for the next power cycle")
+                // Side by side when the panel is wide enough, otherwise stacked; never truncated.
+                ViewThatFits(in: .horizontal) {
+                    HStack { configurationButtons(vm) }
+                    VStack(alignment: .leading) { configurationButtons(vm) }
                 }
                 if vm.pendingSettings > 0 {
                     Label("\(vm.pendingSettings) setting\(vm.pendingSettings == 1 ? "" : "s") queued for the next power cycle", systemImage: "tray.full")
@@ -211,6 +210,16 @@ struct StatsInspector: View {
                     .textSelection(.enabled)
             }
         }
+    }
+
+    @ViewBuilder
+    private func configurationButtons(_ vm: VirtualMachine) -> some View {
+        Button("Edit Resources", systemImage: "slider.horizontal.3") { onEdit(vm) }
+            .disabled(vm.powerState != .stopped)
+            .fixedSize()
+        Button("Settings", systemImage: "list.bullet.rectangle") { onSettings(vm) }
+            .help("Queue .vmx settings for the next power cycle")
+            .fixedSize()
     }
 
     @ViewBuilder
