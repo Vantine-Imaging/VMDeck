@@ -139,9 +139,10 @@ interval per chosen day, in the host's local time) running
 `~/Library/Application Support/VMDeck/restart.sh`. At the scheduled time the
 script asks the guest to restart through VMware Tools; if the guest can't, it
 shuts the VM down (bounded wait, then Power Off) and starts it headless again.
-A schedule can instead **power cycle** the VM every time, which replaces its
-process on the host (freeing memory that process has accumulated) at the cost
-of a few minutes' downtime. VMs that aren't running are left alone. Everything is logged to
+A schedule can instead **suspend and resume** the VM (a fresh host process,
+guest carries on where it was) or **power cycle** it (a fresh host process and
+a guest boot, with any settings queued in `<name>.vmx.vmdeck-pending` applied
+while the VM is off). VMs that aren't running are left alone. Everything is logged to
 `~/Library/Logs/VMDeck/restart.log`. **Restart Now** runs the same steps
 immediately.
 

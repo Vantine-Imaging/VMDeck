@@ -164,7 +164,8 @@ struct Discovery: Sendable {
             case "SCHED" where f.count >= 7:
                 let days = Set(f[3].split(separator: ",").compactMap { Int($0) }.filter { (0...6).contains($0) })
                 schedules[f[6]] = RestartSchedule(hour: Int(f[1]) ?? 0, minute: Int(f[2]) ?? 0,
-                                                  weekdays: days, enabled: f[4] == "1", powerCycle: f[5] == "cycle")
+                                                  weekdays: days, enabled: f[4] == "1",
+                                                  method: RestartSchedule.Method(rawValue: f[5]) ?? .reboot)
             case "OP" where f.count >= 3:
                 operations.append((f[2...].joined(separator: "\t"), parseElapsed(f[1]) ?? 0))
             case "NET" where f.count >= 3:

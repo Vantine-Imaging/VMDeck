@@ -50,7 +50,7 @@ private final class Token {}
         let s = ScheduledRestartManager.parseStatus(out)
         #expect(s.shutdownWaitSeconds == 300)
         #expect(s.schedules["/a/A.vmx"] == RestartSchedule(hour: 3, minute: 0, weekdays: [0], enabled: true))
-        #expect(s.schedules["/b/B.vmx"] == RestartSchedule(hour: 22, minute: 30, weekdays: Set(1...5), enabled: false, powerCycle: true))
+        #expect(s.schedules["/b/B.vmx"] == RestartSchedule(hour: 22, minute: 30, weekdays: Set(1...5), enabled: false, method: .cycle))
         #expect(s.loaded == ["12345"])
         #expect(s.recentLog.hasSuffix("A: guest restarted"))
     }
@@ -93,7 +93,7 @@ private final class Token {}
                     ScheduledRestartManager.runnerScript]
         for (path, s) in schedules.sorted(by: { $0.key < $1.key }) {
             argv += [String(s.hour), String(s.minute), s.weekdays.sorted().map(String.init).joined(separator: ","),
-                     s.enabled ? "1" : "0", s.powerCycle ? "cycle" : "reboot", path]
+                     s.enabled ? "1" : "0", s.method.rawValue, path]
         }
         let r = try await runner.run(argv, timeout: .seconds(20))
         try VMRun.check(r)
@@ -150,8 +150,13 @@ private final class Token {}
         let stuck = try makeVM("Stuck", extra: "fake.resetFails = \"TRUE\"\nfake.softStopHangs = \"TRUE\"\n")
         let off = try makeVM("Off")
         let cycle = try makeVM("Cycle")
-        for vmx in [polite, noTools, stuck, cycle] { try await vmrun.start(vmx) }
-        _ = try await install([polite: RestartSchedule(), cycle: RestartSchedule(powerCycle: true)], wait: 6)
+        let nap = try makeVM("Nap")
+        for vmx in [polite, noTools, stuck, cycle, nap] { try await vmrun.start(vmx) }
+        _ = try await install([polite: RestartSchedule(), cycle: RestartSchedule(method: .cycle),
+                               nap: RestartSchedule(method: .suspend)], wait: 6)
+        // Queue a setting for Cycle's next cold start.
+        try "numvcpus = \"4\"\ncpuid.coresPerSocket = \"4\"\n".write(toFile: cycle + ".vmdeck-pending", atomically: true, encoding: .utf8)
+        try "displayName = \"Cycle\"\ncpuid.coresPerSocket = \"2\"\n".write(toFile: cycle, atomically: true, encoding: .utf8)
 
         var log = try await runRestart(polite)
         #expect(log.contains("Polite: guest restarted"))
@@ -183,6 +188,20 @@ private final class Token {}
         #expect(log.contains("Cycle: started"))
         #expect(!log.contains("Cycle: guest restarted"))
         #expect(try await vmrun.list().contains(cycle))
+        // Pending settings were merged (replace existing key, append new one) with a backup, then removed.
+        let vmxText = try String(contentsOfFile: cycle, encoding: .utf8)
+        #expect(vmxText.contains("cpuid.coresPerSocket = \"4\"") && !vmxText.contains("coresPerSocket = \"2\""))
+        #expect(vmxText.contains("numvcpus = \"4\"") && vmxText.contains("displayName = \"Cycle\""))
+        #expect(!FileManager.default.fileExists(atPath: cycle + ".vmdeck-pending"))
+        #expect(FileManager.default.fileExists(atPath: cycle + ".vmdeck-backup"))
+        #expect(log.contains("Cycle: applied setting cpuid.coresPerSocket"))
+
+        // Suspend and resume: no reset, no shutdown; suspended then resumed.
+        log = try await runRestart(nap)
+        #expect(log.contains("Nap: scheduled suspend and resume"))
+        #expect(log.contains("Nap: suspended"))
+        #expect(log.contains("Nap: resumed"))
+        #expect(try await vmrun.list().contains(nap))
     }
 }
 

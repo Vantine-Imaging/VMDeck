@@ -157,7 +157,7 @@ extension HelpTopic {
             .paragraph("Meant for hosts that reboot: after a power cut, an update, or a restart, the VMs come back headless without anyone opening Fusion. VMDeck installs one LaunchAgent for the host's user (`~/Library/LaunchAgents/com.vantine.vmdeck.autostart.plist`) that runs a script at login. The script goes through the login VMs in the order shown and, for each one, **waits for its files to appear** before starting it. That's what makes it safe for VMs on an external RAID or any volume that mounts late: it waits up to the time you set (10 minutes by default), starts the VM, pauses, and moves on. A VM that's already running is left alone; one whose files never appear is skipped and noted in the log."),
             .paragraph("Saving writes the files; the agent becomes active at the host's next login. Until then the status reads \"Installed, loads at next login\", and **Run Auto-Start Now** in the toolbar sheet runs it immediately, so you can check it works without rebooting the host."),
             .heading("Scheduled Restart"),
-            .paragraph("A time of day on the days you choose, in the host's local time, and one of two methods."),
+            .paragraph("A time of day on the days you choose, in the host's local time, and one of three methods."),
             .paragraph("**Restart the guest** (the default) at that time:"),
             .steps([
                 "The guest is asked to restart through VMware Tools (`vmrun reset soft`). For most guests that's all, and the VM keeps running headless. The VM's process on the host is not replaced.",
@@ -165,7 +165,8 @@ extension HelpTopic {
                 "If it still hasn't powered off by then, the VM is powered off like pulling the plug.",
                 "The VM is started again headless.",
             ]),
-            .paragraph("**Power cycle the VM** skips the first step and always shuts down and starts again. It takes a few minutes longer, but it replaces the VM's process on the host, which frees memory that process has accumulated (Fusion lets it grow well past the configured size over long uptimes, especially after a resume from suspend), and it applies any settings changed since the last power-on."),
+            .paragraph("**Suspend and resume** suspends the VM and starts it again a few seconds later. That ends the VM's process on the host and starts a fresh one, freeing memory the old one had accumulated, while the guest carries on exactly where it was: no guest reboot, so none of the trouble a guest may have at boot, and only a minute or two unreachable."),
+            .paragraph("**Power cycle the VM** skips the first step and always shuts down and starts again. It takes a few minutes longer and the guest boots, but it's a true fresh start: a new process on the host, and any settings queued for the next power-on are applied first (a file named `<name>.vmx.vmdeck-pending` next to the .vmx, one `key = \"value\"` line each, which the script merges into the .vmx with a backup while the VM is off). Fusion rewrites the .vmx when a VM powers off, so edits made while it runs would otherwise be lost."),
             .paragraph("A VM that isn't running at the scheduled time is left alone. Each scheduled VM gets its own LaunchAgent on the host (`~/Library/LaunchAgents/com.vantine.vmdeck.restart.<id>.plist`) with a calendar interval per chosen day. These agents are loaded as soon as you save; a calendar agent doesn't run on load, only at its time."),
             .note("**Restart Now** in the VM's sheet runs the same steps immediately, so you can see the method work before trusting the schedule. It does restart the VM."),
             .heading("Timing"),

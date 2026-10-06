@@ -8,12 +8,43 @@ struct RestartSchedule: Equatable, Sendable {
     /// 0 = Sunday … 6 = Saturday, as launchd counts them.
     var weekdays: Set<Int> = Set(0...6)
     var enabled = true
-    /// Shut down and start again (a fresh vmware-vmx process) instead of
-    /// asking the guest to restart. Slower, but it also resets whatever the
-    /// host process has accumulated.
-    var powerCycle = false
+    /// What the schedule does at that time.
+    enum Method: String, CaseIterable, Sendable {
+        /// Ask the guest to restart through Tools; the host process stays.
+        case reboot
+        /// Suspend and resume: a fresh host process, no guest reboot.
+        case suspend
+        /// Shut down and start: a fresh host process and a guest boot.
+        case cycle
 
-    var verb: String { powerCycle ? "Power cycles" : "Restarts" }
+        var label: String {
+            switch self {
+            case .reboot: "Restart the guest"
+            case .suspend: "Suspend and resume"
+            case .cycle: "Power cycle the VM"
+            }
+        }
+
+        var verb: String {
+            switch self {
+            case .reboot: "Restarts"
+            case .suspend: "Suspends and resumes"
+            case .cycle: "Power cycles"
+            }
+        }
+
+        var noun: String {
+            switch self {
+            case .reboot: "restart"
+            case .suspend: "suspend and resume"
+            case .cycle: "power cycle"
+            }
+        }
+    }
+
+    var method: Method = .reboot
+
+    var verb: String { method.verb }
 
     static let dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
@@ -115,7 +146,7 @@ struct ScheduledRestartManager: Sendable {
                     vmrun.vmrunPath, String(shutdownWaitSeconds), "1", Self.runnerScript]
         for (path, s) in schedules.sorted(by: { $0.key < $1.key }) {
             argv += [String(s.hour), String(s.minute), s.weekdays.sorted().map(String.init).joined(separator: ","),
-                     s.enabled ? "1" : "0", s.powerCycle ? "cycle" : "reboot", path]
+                     s.enabled ? "1" : "0", s.method.rawValue, path]
         }
         let result = try await vmrun.runner.run(argv, timeout: .seconds(60))
         try VMRun.check(result)
@@ -139,7 +170,8 @@ struct ScheduledRestartManager: Sendable {
             case "SCHED" where f.count >= 7:
                 let days = Set(f[3].split(separator: ",").compactMap { Int($0) }.filter { (0...6).contains($0) })
                 status.schedules[f[6]] = RestartSchedule(hour: Int(f[1]) ?? 0, minute: Int(f[2]) ?? 0,
-                                                         weekdays: days, enabled: f[4] == "1", powerCycle: f[5] == "cycle")
+                                                         weekdays: days, enabled: f[4] == "1",
+                                                         method: RestartSchedule.Method(rawValue: f[5]) ?? .reboot)
             case "LOADED" where f.count >= 2:
                 status.loaded.insert(f[1])
             case "LOG":
@@ -177,9 +209,26 @@ struct ScheduledRestartManager: Sendable {
     mode=$(awk -F'\t' -v v="$vmx" 'NR > 2 && $NF == v { print (NF >= 6 ? $5 : "reboot") }' "$LIST" | tail -1)
     tmp=$(mktemp -t vmdeck-restart) || exit 1
     trap 'rm -f "$tmp"' EXIT
-    if [ "$mode" = cycle ]; then echo "$(stamp) $name: scheduled power cycle"; else echo "$(stamp) $name: scheduled restart"; fi
+    case $mode in
+      cycle) echo "$(stamp) $name: scheduled power cycle" ;;
+      suspend) echo "$(stamp) $name: scheduled suspend and resume" ;;
+      *) echo "$(stamp) $name: scheduled restart" ;;
+    esac
     if ! running; then echo "$(stamp) $name: not running, skipped"; exit 0; fi
     # Output to a file, never $(…): vmware-vmx holds vmrun's stdout open.
+    if [ "$mode" = suspend ]; then
+      # A suspend ends the host process; resuming starts a fresh one with the
+      # guest exactly where it was. No guest reboot, so no boot-time trouble.
+      if ! "$VMRUN" -T fusion suspend "$vmx" hard >"$tmp" 2>&1 </dev/null; then
+        echo "$(stamp) $name: SUSPEND FAILED: $(tr '\n' ' ' <"$tmp")"; exit 1
+      fi
+      echo "$(stamp) $name: suspended"
+      sleep 3
+      if "$VMRUN" -T fusion start "$vmx" nogui >"$tmp" 2>&1 </dev/null; then
+        echo "$(stamp) $name: resumed"; exit 0
+      fi
+      echo "$(stamp) $name: RESUME FAILED: $(tr '\n' ' ' <"$tmp")"; exit 1
+    fi
     if [ "$mode" != cycle ]; then
       if "$VMRUN" -T fusion reset "$vmx" soft >"$tmp" 2>&1 </dev/null; then
         echo "$(stamp) $name: guest restarted"; exit 0
@@ -200,6 +249,22 @@ struct ScheduledRestartManager: Sendable {
       echo "$(stamp) $name: shut down cleanly"
     fi
     sleep 3
+    # Settings queued in <vmx>.vmdeck-pending (key = "value" lines) go in now,
+    # while the VM is off: Fusion rewrites the .vmx at power-off, so edits made
+    # while it ran would have been lost.
+    pending="$vmx.vmdeck-pending"
+    if [ -s "$pending" ] && ! running; then
+      cp -p "$vmx" "$vmx.vmdeck-backup" && while IFS= read -r line; do
+        key=$(printf '%s' "$line" | sed -nE 's/^[[:space:]]*([A-Za-z0-9_.:-]+)[[:space:]]*=.*/\1/p')
+        [ -n "$key" ] || continue
+        if grep -qi "^$key[[:space:]]*=" "$vmx"; then
+          awk -v k="$key" -v l="$line" 'BEGIN { IGNORECASE = 1 } tolower($0) ~ "^" tolower(k) "[[:space:]]*=" { print l; next } { print }' "$vmx" > "$vmx.vmdeck-new" && cat "$vmx.vmdeck-new" > "$vmx" && rm -f "$vmx.vmdeck-new"
+        else
+          printf '%s\n' "$line" >> "$vmx"
+        fi
+        echo "$(stamp) $name: applied setting $line"
+      done < "$pending" && rm -f "$pending"
+    fi
     if "$VMRUN" -T fusion start "$vmx" nogui >"$tmp" 2>&1 </dev/null; then
       echo "$(stamp) $name: started"
     else
