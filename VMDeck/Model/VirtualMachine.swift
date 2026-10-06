@@ -64,6 +64,8 @@ struct VirtualMachine: Identifiable, Equatable, Sendable {
     var autoStart = false
     /// The host's saved restart schedule for this VM, enabled or not.
     var restartSchedule: RestartSchedule?
+    /// Settings waiting in <vmx>.vmdeck-pending for the next power cycle.
+    var pendingSettings = 0
 
     /// "Starts at login, restarts daily at 3:00", or "Off".
     var automationLabel: String {

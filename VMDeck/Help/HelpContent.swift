@@ -25,6 +25,7 @@ struct HelpTopic: Identifiable, Hashable {
     static let automation = "automation"
     static let history = "history"
     static let usage = "usage"
+    static let settings = "settings"
     static let troubleshooting = "troubleshooting"
     static let security = "security"
 }
@@ -205,6 +206,14 @@ extension HelpTopic {
                 "Gaps mean no samples: the VM was off, or the host was asleep, off, or logged out.",
             ]),
             .note("Each point is an average over its bucket: a minute for the hour view, up to two hours for the month view."),
+        ]),
+
+        HelpTopic(id: settings, title: "Queued Settings", systemImage: "list.bullet.rectangle", blocks: [
+            .paragraph("**Settings** in the stats panel (under Configuration) queues changes to a VM's `.vmx` file: any key and value, with a menu of the common ones such as `numvcpus`, `cpuid.coresPerSocket`, `memsize`, and `mks.enable3d`. Each row shows the VM's current value next to the new one."),
+            .heading("Why Queue"),
+            .paragraph("Fusion rewrites a VM's `.vmx` from memory when the VM powers off, so a change made to the file while the VM runs is simply undone. Queued settings wait in `<name>.vmx.vmdeck-pending` next to the file and go in while the VM is off: either at the VM's next **scheduled power cycle** (Automation, method Power cycle) or right away with **Apply Now** when the VM is shut down. The .vmx is backed up to `<name>.vmx.vmdeck-backup` first. Existing keys are replaced, new ones appended."),
+            .paragraph("A suspended VM can't take hardware changes on resume, and a guest restart doesn't re-read the file, so only a true power-off counts."),
+            .note("Edit Resources (vCPUs, memory, disks) still edits the .vmx directly, and so still needs the VM shut down. Settings is for everything else, and for changes you want applied unattended."),
         ]),
 
         HelpTopic(id: troubleshooting, title: "Troubleshooting", systemImage: "stethoscope", blocks: [

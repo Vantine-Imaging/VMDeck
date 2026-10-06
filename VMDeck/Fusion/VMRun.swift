@@ -105,6 +105,11 @@ struct VMRun: Sendable {
         if let line = result.stdout.split(whereSeparator: \.isNewline).first(where: { $0.hasPrefix("Error:") }) {
             throw VMRunError.vmrun(line.dropFirst("Error:".count).trimmingCharacters(in: .whitespaces))
         }
+        // VMDeck's own host scripts report problems as "ERR<tab>message" with exit 0,
+        // so the message survives the SSH round trip intact.
+        if let line = result.stdout.split(whereSeparator: \.isNewline).first(where: { $0.hasPrefix("ERR\t") }) {
+            throw VMRunError.failed(line.dropFirst(4).trimmingCharacters(in: .whitespaces))
+        }
         guard result.status == 0 else {
             let detail = [result.stderr, result.stdout]
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }

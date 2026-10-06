@@ -31,6 +31,8 @@ architecture doesn't matter to VMDeck.
 - **IP addresses** from VMware Tools, with a fallback to the host's ARP table
   and Fusion's DHCP leases when Tools isn't running.
 - **Resource editing** for shut-down VMs: vCPUs, memory, and growing disks.
+- **Queued settings**: any `.vmx` key, applied at the VM's next power cycle
+  (or right away while it's off), since Fusion rewrites the file at power-off.
 - **Connect**: one click to the guest's screen, RDP for Windows, VNC for the rest.
 - **Automation**, per VM: start at login (waiting for slow external volumes
   first) and recurring restarts on a time and weekdays, with a guest restart
@@ -354,6 +356,7 @@ Debug builds accept these, for screenshots and manual testing:
 | `-VMDeckAutomate "<VM name>"` | Open a VM's Automation sheet |
 | `-VMDeckOpenAutomation YES` | Open the host's Automation sheet |
 | `-VMDeckHistory "<VM name>"` | Open a VM's History sheet |
+| `-VMDeckSettings "<VM name>"` | Open a VM's queued-settings sheet |
 | `-VMDeckUsage "<VM name>"` | Open a VM's Usage sheet |
 | `-VMDeckCheckUpdates YES` | Check GitHub for a newer release now |
 | `-VMDeckOpenHelp <topic-id>` | Open the Help window on a topic |

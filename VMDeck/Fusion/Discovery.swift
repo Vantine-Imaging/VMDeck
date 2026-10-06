@@ -66,6 +66,8 @@ struct DiscoveredVM: Equatable, Sendable {
     var tools: ToolsState?
     var autoStart = false
     var restartSchedule: RestartSchedule?
+    /// Lines queued in <vmx>.vmdeck-pending for the next power cycle.
+    var pendingSettings = 0
 }
 
 /// Finds every VM on a host, stopped ones included, plus live stats, in one
@@ -109,6 +111,7 @@ struct Discovery: Sendable {
     ///   OP    <etime> <args…>                               a running vmrun command
     ///   GUEST <path> <ip> <toolsState>                      Tools' published IP, per running VM
     ///   AUTO  <path>                                        in the host's auto-start list
+    ///   PEND  <path> <count>                                settings queued for the next power cycle
     ///   SCHED <hour> <minute> <days> <enabled> <mode> <path>  a saved restart schedule (mode: reboot|cycle)
     ///   ERR   <message>
     static func parse(_ output: String) -> Result {
@@ -121,6 +124,7 @@ struct Discovery: Sendable {
         var guests: [String: (ip: String, tools: String)] = [:]
         var autoStart = Set<String>()
         var schedules: [String: RestartSchedule] = [:]
+        var pending: [String: Int] = [:]
         var result = Result()
         let now = Date.now
 
@@ -161,6 +165,8 @@ struct Discovery: Sendable {
                 guests[f[1]] = (f[2], f[3])
             case "AUTO" where f.count >= 2:
                 autoStart.insert(f[1])
+            case "PEND" where f.count >= 3:
+                pending[f[1]] = Int(f[2]) ?? 0
             case "SCHED" where f.count >= 7:
                 let days = Set(f[3].split(separator: ",").compactMap { Int($0) }.filter { (0...6).contains($0) })
                 schedules[f[6]] = RestartSchedule(hour: Int(f[1]) ?? 0, minute: Int(f[2]) ?? 0,
@@ -187,7 +193,8 @@ struct Discovery: Sendable {
                 config: record.config,
                 volume: volumes[record.path],
                 autoStart: autoStart.contains(record.path),
-                restartSchedule: schedules[record.path])
+                restartSchedule: schedules[record.path],
+                pendingSettings: pending[record.path] ?? 0)
             // vmware-vmx takes the .vmx path as its last argument.
             if state == .running {
                 vm.process = processes.first { $0.args.hasSuffix(record.path) }?.stats
@@ -313,6 +320,7 @@ struct Discovery: Sendable {
         sed -n 's/^[^=]*= *"\(.*\)".*$/\1/p' | tr '\n' ',')
       printf 'VM\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$real" "$(cfg displayname "$real")" "$susp" \
         "$(cfg numvcpus "$real")" "$(cfg memsize "$real")" "$(cfg guestos "$real")" "$macs"
+      [ -s "$real.vmdeck-pending" ] && printf 'PEND\t%s\t%s\n' "$real" "$(grep -c '=' "$real.vmdeck-pending")"
       df -Pk "$dir" 2>/dev/null | awk -v p="$real" 'NR == 2 {
         m = $6; for (i = 7; i <= NF; i++) m = m " " $i
         print "DF\t" p "\t" $2 "\t" $4 "\t" m }'

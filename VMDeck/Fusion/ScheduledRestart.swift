@@ -193,6 +193,7 @@ struct ScheduledRestartManager: Sendable {
     # Written by VMDeck. Restarts one VM: asks the guest to restart; if it
     # can't, shuts the VM down (waiting a bounded time, then powering off)
     # and starts it headless again. Edit schedules in VMDeck, not here.
+    """# + "\n" + PendingSettingsManager.applyFunction + "\n" + #"""
     vmx=$1
     LIST="$HOME/Library/Application Support/VMDeck/restart.list"
     LOG="$HOME/Library/Logs/VMDeck/restart.log"
@@ -252,18 +253,8 @@ struct ScheduledRestartManager: Sendable {
     # Settings queued in <vmx>.vmdeck-pending (key = "value" lines) go in now,
     # while the VM is off: Fusion rewrites the .vmx at power-off, so edits made
     # while it ran would have been lost.
-    pending="$vmx.vmdeck-pending"
-    if [ -s "$pending" ] && ! running; then
-      cp -p "$vmx" "$vmx.vmdeck-backup" && while IFS= read -r line; do
-        key=$(printf '%s' "$line" | sed -nE 's/^[[:space:]]*([A-Za-z0-9_.:-]+)[[:space:]]*=.*/\1/p')
-        [ -n "$key" ] || continue
-        if grep -qi "^$key[[:space:]]*=" "$vmx"; then
-          awk -v k="$key" -v l="$line" 'BEGIN { IGNORECASE = 1 } tolower($0) ~ "^" tolower(k) "[[:space:]]*=" { print l; next } { print }' "$vmx" > "$vmx.vmdeck-new" && cat "$vmx.vmdeck-new" > "$vmx" && rm -f "$vmx.vmdeck-new"
-        else
-          printf '%s\n' "$line" >> "$vmx"
-        fi
-        echo "$(stamp) $name: applied setting $line"
-      done < "$pending" && rm -f "$pending"
+    if ! running; then
+      vmdeck_apply_pending "$vmx" | while IFS= read -r l; do echo "$(stamp) $name: applied setting $l"; done
     fi
     if "$VMRUN" -T fusion start "$vmx" nogui >"$tmp" 2>&1 </dev/null; then
       echo "$(stamp) $name: started"

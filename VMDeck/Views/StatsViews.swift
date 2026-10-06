@@ -60,6 +60,7 @@ struct StatsInspector: View {
     let onAutomate: (VirtualMachine) -> Void
     let onHistory: (VirtualMachine) -> Void
     let onUsage: (VirtualMachine?) -> Void
+    let onSettings: (VirtualMachine) -> Void
 
     private var vm: VirtualMachine? {
         selection.flatMap { id in store.vms.first { $0.id == id } }
@@ -170,8 +171,16 @@ struct StatsInspector: View {
             Text("Configuration")
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
-                Button("Edit Resources", systemImage: "slider.horizontal.3") { onEdit(vm) }
-                    .disabled(vm.powerState != .stopped)
+                HStack {
+                    Button("Edit Resources", systemImage: "slider.horizontal.3") { onEdit(vm) }
+                        .disabled(vm.powerState != .stopped)
+                    Button("Settings", systemImage: "list.bullet.rectangle") { onSettings(vm) }
+                        .help("Queue .vmx settings for the next power cycle")
+                }
+                if vm.pendingSettings > 0 {
+                    Label("\(vm.pendingSettings) setting\(vm.pendingSettings == 1 ? "" : "s") queued for the next power cycle", systemImage: "tray.full")
+                        .foregroundStyle(.orange)
+                }
                 if vm.powerState == .running {
                     Text("Shut the VM down to change vCPUs, memory, or disk sizes.")
                 } else if vm.powerState == .suspended {

@@ -85,7 +85,7 @@ final class VMStore {
             vms = found.map { d in
                 var vm = VirtualMachine(vmxPath: d.vmxPath, displayName: d.displayName, powerState: d.powerState,
                                         config: d.config, process: d.process, volume: d.volume, pending: d.pending,
-                                        autoStart: d.autoStart, restartSchedule: d.restartSchedule)
+                                        autoStart: d.autoStart, restartSchedule: d.restartSchedule, pendingSettings: d.pendingSettings)
                 guard d.powerState == .running else { return vm }
                 vm.tools = d.tools
                 (vm.ipAddress, vm.ipSource) = Self.chooseIP(guestIP: d.guestIP, macs: d.config.macAddresses,
@@ -237,6 +237,23 @@ final class VMStore {
 
     func setUsageRecording(_ on: Bool) async throws {
         try await UsageRecorderManager(vmrun: vmrun).setRecording(on)
+    }
+
+    // MARK: - Queued settings
+
+    func pendingSettings(of vm: VirtualMachine) async throws -> PendingSettingsStatus {
+        try await PendingSettingsManager(vmrun: vmrun).status(for: vm.id)
+    }
+
+    func savePendingSettings(_ settings: [PendingSetting], for vm: VirtualMachine) async throws {
+        try await PendingSettingsManager(vmrun: vmrun).save(settings, for: vm.id)
+        await refresh()
+    }
+
+    func applyPendingSettingsNow(for vm: VirtualMachine) async throws -> [String] {
+        let done = try await PendingSettingsManager(vmrun: vmrun).applyNow(for: vm.id)
+        await refresh()
+        return done
     }
 
     // MARK: - Resources
