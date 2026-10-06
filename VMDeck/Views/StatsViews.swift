@@ -59,6 +59,7 @@ struct StatsInspector: View {
     let onEdit: (VirtualMachine) -> Void
     let onAutomate: (VirtualMachine) -> Void
     let onHistory: (VirtualMachine) -> Void
+    let onUsage: (VirtualMachine?) -> Void
 
     private var vm: VirtualMachine? {
         selection.flatMap { id in store.vms.first { $0.id == id } }
@@ -117,8 +118,12 @@ struct StatsInspector: View {
                 }
             }
             LabeledContent("History") {
-                Button("Show", systemImage: "clock.arrow.circlepath") { onHistory(vm) }
-                    .help("Boots, suspends, reboots, and kernel panics from Fusion's logs")
+                HStack(spacing: 8) {
+                    Button("Events", systemImage: "clock.arrow.circlepath") { onHistory(vm) }
+                        .help("Boots, suspends, reboots, and kernel panics from Fusion's logs")
+                    Button("Usage", systemImage: "chart.xyaxis.line") { onUsage(vm) }
+                        .help("CPU and memory over time, from the recorder on the host")
+                }
             }
             if vm.powerState == .running {
                 LabeledContent("VMware Tools", value: (vm.tools ?? .unknown).label)
@@ -213,6 +218,10 @@ struct StatsInspector: View {
                 }
                 if let boot = stats.bootTime {
                     LabeledContent("Up For", value: Format.duration(Date.now.timeIntervalSince(boot)))
+                }
+                LabeledContent("History") {
+                    Button("Usage", systemImage: "chart.xyaxis.line") { onUsage(nil) }
+                        .help("Load and memory over time, from the recorder on the host")
                 }
             }
         }

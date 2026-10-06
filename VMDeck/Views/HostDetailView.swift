@@ -17,6 +17,8 @@ struct HostDetailView: View {
     @State private var showAutomation = false
     @State private var automating: VirtualMachine?
     @State private var showingHistory: VirtualMachine?
+    @State private var showingUsage = false
+    @State private var usageVM: VirtualMachine?
 
     var body: some View {
         content
@@ -54,7 +56,8 @@ struct HostDetailView: View {
                 toggleStats: { showStats.toggle() },
                 statsShown: showStats))
             .inspector(isPresented: $showStats) {
-                StatsInspector(store: store, selection: selection, onEdit: { editing = $0 }, onAutomate: { automating = $0 }, onHistory: { showingHistory = $0 })
+                StatsInspector(store: store, selection: selection, onEdit: { editing = $0 }, onAutomate: { automating = $0 }, onHistory: { showingHistory = $0 },
+                               onUsage: { usageVM = $0; showingUsage = true })
                     .inspectorColumnWidth(min: 250, ideal: 290, max: 420)
             }
             #if DEBUG
@@ -79,6 +82,12 @@ struct HostDetailView: View {
                 if automating == nil, let name = UserDefaults.standard.string(forKey: "VMDeckAutomate") {
                     automating = vms.first { $0.displayName == name }
                     UserDefaults.standard.removeObject(forKey: "VMDeckAutomate")
+                }
+                // `--args -VMDeckUsage "Name"` opens a VM's Usage sheet ("host" for the host alone).
+                if !showingUsage, let name = UserDefaults.standard.string(forKey: "VMDeckUsage") {
+                    usageVM = vms.first { $0.displayName == name }
+                    showingUsage = true
+                    UserDefaults.standard.removeObject(forKey: "VMDeckUsage")
                 }
                 // `--args -VMDeckHistory "Name"` opens a VM's History sheet.
                 if showingHistory == nil, let name = UserDefaults.standard.string(forKey: "VMDeckHistory") {
@@ -105,6 +114,9 @@ struct HostDetailView: View {
             }
             .sheet(item: $showingHistory) { vm in
                 HistorySheet(vm: vm, store: store)
+            }
+            .sheet(isPresented: $showingUsage) {
+                UsageSheet(vm: usageVM, store: store)
             }
             .sheet(item: $editing) { vm in
                 EditResourcesSheet(vm: vm, store: store)

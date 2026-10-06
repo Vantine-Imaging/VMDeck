@@ -37,6 +37,9 @@ architecture doesn't matter to VMDeck.
   first and a bounded shutdown as the fallback.
 - **History** per VM: boots, resumes, suspends, shutdowns, guest reboots,
   restart requests, and kernel panics, read from Fusion's own logs.
+- **Usage history**: CPU and memory per VM and load and memory per host over
+  the last hour to 30 days, from a once-a-minute recorder VMDeck can install
+  on the host.
 - **Built-in help**: Help > VMDeck Help (⌘?).
 
 ## Getting Started
@@ -154,6 +157,24 @@ panic. It reads Fusion's `vmware.log` and the rotated copies next to the
 `.vmx`, so it reaches back about four power-ons, and nothing is installed on
 the host to collect it. Panics that cluster a minute or two after a boot
 are the guest crash-looping at startup.
+
+### Usage History
+
+![A VM's Usage sheet: CPU and host-memory charts for the VM over 24 hours, and the host's load and memory below](docs/usage.png)
+
+**History > Usage** charts a VM's CPU (as a share of its vCPUs) and the
+memory its process holds on the host, plus the host's load average and
+memory, over the last hour, 24 hours, 7 days, or 30 days. The host's own
+entry in the stats panel has the same button for the host alone.
+
+Because VMDeck isn't always running, the samples come from a **recorder**
+on the host that VMDeck installs when you click Start Recording: a per-user
+LaunchAgent (`com.vantine.vmdeck.usage`) running
+`~/Library/Application Support/VMDeck/usage.sh` once a minute, which appends
+one line per running VM and one for the host to
+`~/Library/Logs/VMDeck/usage/YYYY-MM.tsv`. Three months are kept. The host
+averages each chart bucket before sending it, so only the points cross the
+wire. Stop Recording removes the agent and keeps the samples.
 
 ### Editing Resources
 
@@ -327,6 +348,7 @@ Debug builds accept these, for screenshots and manual testing:
 | `-VMDeckAutomate "<VM name>"` | Open a VM's Automation sheet |
 | `-VMDeckOpenAutomation YES` | Open the host's Automation sheet |
 | `-VMDeckHistory "<VM name>"` | Open a VM's History sheet |
+| `-VMDeckUsage "<VM name>"` | Open a VM's Usage sheet |
 | `-VMDeckOpenHelp <topic-id>` | Open the Help window on a topic |
 
 For example:

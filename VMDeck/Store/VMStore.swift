@@ -229,6 +229,16 @@ final class VMStore {
         try await VMHistoryManager(vmrun: vmrun).history(for: vm.id)
     }
 
+    // MARK: - Usage history
+
+    func usage(for vm: VirtualMachine?, range: UsageRange) async throws -> UsageSeries {
+        try await UsageRecorderManager(vmrun: vmrun).series(for: vm?.id, range: range)
+    }
+
+    func setUsageRecording(_ on: Bool) async throws {
+        try await UsageRecorderManager(vmrun: vmrun).setRecording(on)
+    }
+
     // MARK: - Resources
 
     func inspectResources(of vm: VirtualMachine) async throws -> VMResources {

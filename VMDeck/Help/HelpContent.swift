@@ -24,6 +24,7 @@ struct HelpTopic: Identifiable, Hashable {
     static let resources = "resources"
     static let automation = "automation"
     static let history = "history"
+    static let usage = "usage"
     static let troubleshooting = "troubleshooting"
     static let security = "security"
 }
@@ -184,6 +185,21 @@ extension HelpTopic {
                 "**Scheduled restart** lines are VMDeck's own, from the host's restart log, in the host's local time.",
             ]),
             .note("Tick **Problems and restarts only** to hide the routine power events and see just reboots, restart requests, and panics."),
+        ]),
+
+        HelpTopic(id: usage, title: "Usage History", systemImage: "chart.xyaxis.line", blocks: [
+            .paragraph("**History > Usage** in the stats panel charts a VM's CPU and host memory over the last hour, day, week, or month, along with the host's load average and memory. The host's own entry has the same button for the host alone."),
+            .heading("The Recorder"),
+            .paragraph("VMDeck polls a host every 5 seconds while it's open, but nothing is kept. For history it installs a small **recorder** on the host when you click Start Recording: a per-user LaunchAgent (`~/Library/LaunchAgents/com.vantine.vmdeck.usage.plist`) that runs `~/Library/Application Support/VMDeck/usage.sh` once a minute. Each run appends one line per running VM (CPU and memory of its process) and one for the host (load, memory used, swap) to `~/Library/Logs/VMDeck/usage/YYYY-MM.tsv`. Three months are kept; older files are deleted."),
+            .paragraph("It runs in the host user's login session, like the other VMDeck agents, so it needs that user logged in (automatic login after reboots). It reads `ps`, `vm_stat`, and `sysctl`, and touches nothing else. **Stop Recording** removes the agent but keeps the samples."),
+            .heading("Reading the Charts"),
+            .bullets([
+                "**CPU** is the share of the VM's own vCPUs, as in the live stats: a 4-vCPU VM at 100% is using all four.",
+                "**Host Memory** is what the VM's process holds on the host. Fusion lets it grow well past the configured size with reclaimable cache; a drop to the configured size means the VM was reset or restarted.",
+                "**Load** is the host's 1-minute load average with a dashed line at its core count. Above the line, every core is busy.",
+                "Gaps mean no samples: the VM was off, or the host was asleep, off, or logged out.",
+            ]),
+            .note("Each point is an average over its bucket: a minute for the hour view, up to two hours for the month view."),
         ]),
 
         HelpTopic(id: troubleshooting, title: "Troubleshooting", systemImage: "stethoscope", blocks: [
