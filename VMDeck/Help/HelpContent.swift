@@ -42,6 +42,8 @@ extension HelpTopic {
                 "Use the buttons on each row to start, shut down, suspend, or restart a VM.",
                 "Select a VM to see its stats in the panel on the right. ⌥⌘I hides or shows the panel.",
             ]),
+            .heading("Updates"),
+            .paragraph("VMDeck checks GitHub for a newer release once a day when it opens, and offers the installer when there is one. **VMDeck > Check for Updates** checks right away. Skip This Version silences one release; later ones still show. The check sends nothing but a request for the latest release."),
             .heading("Keyboard Shortcuts"),
             .bullets([
                 "⌘N: Add Host",

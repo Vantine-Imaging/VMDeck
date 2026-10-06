@@ -40,6 +40,8 @@ architecture doesn't matter to VMDeck.
 - **Usage history**: CPU and memory per VM and load and memory per host over
   the last hour to 30 days, from a once-a-minute recorder VMDeck can install
   on the host.
+- **Update check**: once a day against this repo's releases, plus VMDeck >
+  Check for Updates.
 - **Built-in help**: Help > VMDeck Help (⌘?).
 
 ## Getting Started
@@ -352,6 +354,7 @@ Debug builds accept these, for screenshots and manual testing:
 | `-VMDeckOpenAutomation YES` | Open the host's Automation sheet |
 | `-VMDeckHistory "<VM name>"` | Open a VM's History sheet |
 | `-VMDeckUsage "<VM name>"` | Open a VM's Usage sheet |
+| `-VMDeckCheckUpdates YES` | Check GitHub for a newer release now |
 | `-VMDeckOpenHelp <topic-id>` | Open the Help window on a topic |
 
 For example:

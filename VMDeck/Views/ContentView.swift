@@ -18,6 +18,7 @@ enum HostSheet: Identifiable {
 
 struct ContentView: View {
     @Environment(HostStore.self) private var hostStore
+    @Environment(UpdateChecker.self) private var updateChecker
     @State private var selection: Host.ID?
     @State private var sheet: HostSheet?
     /// Owned here so the sidebar stays as the user left it. Unbound, the split
@@ -76,7 +77,24 @@ struct ContentView: View {
         }
         .focusedSceneValue(\.appCommands, AppCommandActions(
             addHost: { sheet = .add },
-            setUpRemoteMac: { sheet = .sshSetup(nil) }))
+            setUpRemoteMac: { sheet = .sshSetup(nil) },
+            checkForUpdates: { Task { await updateChecker.check(manual: true) } }))
+        .sheet(item: Binding(get: { updateChecker.available }, set: { updateChecker.available = $0 })) { release in
+            UpdateSheet(release: release, checker: updateChecker)
+        }
+        .alert("Check for Updates", isPresented: Binding(get: { updateChecker.manualResult != nil },
+                                                        set: { if !$0 { updateChecker.manualResult = nil } })) {
+            Button("OK") {}
+        } message: {
+            Text(updateChecker.manualResult ?? "")
+        }
+        .task {
+            #if DEBUG
+            // `--args -VMDeckCheckUpdates YES` forces the check (and the sheet, if newer).
+            if UserDefaults.standard.bool(forKey: "VMDeckCheckUpdates") { await updateChecker.check(manual: true); return }
+            #endif
+            await updateChecker.checkIfDue()
+        }
         .onAppear {
             if selection == nil { selection = hostStore.hosts.first?.id }
             #if DEBUG

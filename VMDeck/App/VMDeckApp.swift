@@ -5,11 +5,19 @@ struct VMDeckApp: App {
     static let helpWindowID = "help"
 
     @State private var hostStore = HostStore()
+    // `--args -VMDeckPretendVersion 1.0.0` (Debug) makes the current release look new, for screenshots.
+    @State private var updateChecker = UpdateChecker(currentVersion: {
+        #if DEBUG
+        if let v = UserDefaults.standard.string(forKey: "VMDeckPretendVersion") { return v }
+        #endif
+        return Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
+    }())
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(hostStore)
+                .environment(updateChecker)
                 .frame(minWidth: 820, minHeight: 420)
         }
         .defaultSize(width: 1200, height: 620)
@@ -27,6 +35,7 @@ struct VMDeckApp: App {
 struct AppCommandActions {
     var addHost: () -> Void
     var setUpRemoteMac: () -> Void
+    var checkForUpdates: () -> Void
 }
 
 /// Actions for the host on screen, published by HostDetailView.
@@ -49,6 +58,11 @@ struct VMDeckCommands: Commands {
     @FocusedValue(\.hostCommands) private var host
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates") { app?.checkForUpdates() }
+                .disabled(app == nil)
+        }
+
         CommandGroup(replacing: .newItem) {
             Button("Add Host") { app?.addHost() }
                 .keyboardShortcut("n")

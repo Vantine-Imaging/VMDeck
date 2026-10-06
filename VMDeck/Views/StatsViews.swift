@@ -74,8 +74,8 @@ struct StatsInspector: View {
                     Text("Select a VM to see its stats.")
                         .foregroundStyle(.secondary)
                 }
+                hostSection
             }
-            hostSection
         }
         .formStyle(.grouped)
         .task(id: selection) {
