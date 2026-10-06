@@ -223,6 +223,12 @@ final class VMStore {
         try await ScheduledRestartManager(vmrun: vmrun).restartNow(vm.id)
     }
 
+    // MARK: - History
+
+    func history(of vm: VirtualMachine) async throws -> VMHistory {
+        try await VMHistoryManager(vmrun: vmrun).history(for: vm.id)
+    }
+
     // MARK: - Resources
 
     func inspectResources(of vm: VirtualMachine) async throws -> VMResources {

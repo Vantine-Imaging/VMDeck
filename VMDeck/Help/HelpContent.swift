@@ -23,6 +23,7 @@ struct HelpTopic: Identifiable, Hashable {
     static let stats = "stats"
     static let resources = "resources"
     static let automation = "automation"
+    static let history = "history"
     static let troubleshooting = "troubleshooting"
     static let security = "security"
 }
@@ -170,6 +171,19 @@ extension HelpTopic {
             .paragraph("Scripts and lists live in `~/Library/Application Support/VMDeck/` on the host (`autostart.sh`, `autostart.list`, `restart.sh`, `restart.list`); logs in `~/Library/Logs/VMDeck/`. A VM's sheet shows its own recent log lines; **Show Log** in the toolbar sheet shows everything."),
             .heading("Turning It Off"),
             .paragraph("Turn both switches off in the VM's sheet and Save. When no VM starts at login any more, the login agent and its files are removed from the host."),
+        ]),
+
+        HelpTopic(id: history, title: "History", systemImage: "clock.arrow.circlepath", blocks: [
+            .paragraph("Select a VM and click **Show** next to History in the stats panel to see what has happened to it: power-ons and resumes, suspends and shutdowns, reboots the guest did itself, restarts requested through VMware Tools, VMDeck's scheduled restarts, and **kernel panics** inside the guest."),
+            .paragraph("It comes from Fusion's own log for the VM (`vmware.log` next to the .vmx, plus the three rotated copies Fusion keeps), so it reaches back as far as those files do: typically the last four times the VM was powered on or resumed. Nothing is installed or changed on the host to collect it."),
+            .heading("Reading It"),
+            .bullets([
+                "**Guest rebooted** is the guest restarting itself, whether from a scheduled restart, a Restart in VMDeck, or someone choosing Restart inside the guest. A reboot that follows a kernel panic by a few seconds is the guest recovering from that panic.",
+                "**Kernel panic** is logged for macOS guests, with the first line of the panic. Several panics a minute or two apart right after a boot mean the guest is crash-looping at startup; the full reports are inside the guest in /Library/Logs/DiagnosticReports.",
+                "**Guest up** marks VMware Tools reporting in, which is the moment the guest finished booting.",
+                "**Scheduled restart** lines are VMDeck's own, from the host's restart log, in the host's local time.",
+            ]),
+            .note("Tick **Problems and restarts only** to hide the routine power events and see just reboots, restart requests, and panics."),
         ]),
 
         HelpTopic(id: troubleshooting, title: "Troubleshooting", systemImage: "stethoscope", blocks: [

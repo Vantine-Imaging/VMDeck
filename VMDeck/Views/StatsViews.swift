@@ -58,6 +58,7 @@ struct StatsInspector: View {
     let selection: VirtualMachine.ID?
     let onEdit: (VirtualMachine) -> Void
     let onAutomate: (VirtualMachine) -> Void
+    let onHistory: (VirtualMachine) -> Void
 
     private var vm: VirtualMachine? {
         selection.flatMap { id in store.vms.first { $0.id == id } }
@@ -114,6 +115,10 @@ struct StatsInspector: View {
                     Button("Edit", systemImage: "clock.badge.checkmark") { onAutomate(vm) }
                         .help("Start this VM at login, or restart it on a schedule")
                 }
+            }
+            LabeledContent("History") {
+                Button("Show", systemImage: "clock.arrow.circlepath") { onHistory(vm) }
+                    .help("Boots, suspends, reboots, and kernel panics from Fusion's logs")
             }
             if vm.powerState == .running {
                 LabeledContent("VMware Tools", value: (vm.tools ?? .unknown).label)

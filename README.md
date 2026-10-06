@@ -35,6 +35,8 @@ architecture doesn't matter to VMDeck.
 - **Automation**, per VM: start at login (waiting for slow external volumes
   first) and recurring restarts on a time and weekdays, with a guest restart
   first and a bounded shutdown as the fallback.
+- **History** per VM: boots, resumes, suspends, shutdowns, guest reboots,
+  restart requests, and kernel panics, read from Fusion's own logs.
 - **Built-in help**: Help > VMDeck Help (⌘?).
 
 ## Getting Started
@@ -139,6 +141,19 @@ immediately.
 Both run in the host user's *login session*. A host that reboots to the
 login screen starts nothing until someone logs in; VMDeck warns when the
 host has automatic login off.
+
+### History
+
+![A VM's History sheet: counts of boots, guest reboots, suspends and kernel panics, and a list of dated events with the panic lines in red](docs/history.png)
+
+**History > Show** in the stats panel lists what has happened to a VM:
+power-ons and resumes, suspends and shutdowns, reboots the guest did
+itself, restarts requested through VMware Tools, VMDeck's scheduled
+restarts, and kernel panics in macOS guests with the first line of each
+panic. It reads Fusion's `vmware.log` and the rotated copies next to the
+`.vmx`, so it reaches back about four power-ons, and nothing is installed on
+the host to collect it. Panics that cluster a minute or two after a boot
+are the guest crash-looping at startup.
 
 ### Editing Resources
 
@@ -311,6 +326,7 @@ Debug builds accept these, for screenshots and manual testing:
 | `-VMDeckEdit "<VM name>"` | Open the resource editor for a VM |
 | `-VMDeckAutomate "<VM name>"` | Open a VM's Automation sheet |
 | `-VMDeckOpenAutomation YES` | Open the host's Automation sheet |
+| `-VMDeckHistory "<VM name>"` | Open a VM's History sheet |
 | `-VMDeckOpenHelp <topic-id>` | Open the Help window on a topic |
 
 For example:

@@ -16,6 +16,7 @@ struct HostDetailView: View {
     @State private var editing: VirtualMachine?
     @State private var showAutomation = false
     @State private var automating: VirtualMachine?
+    @State private var showingHistory: VirtualMachine?
 
     var body: some View {
         content
@@ -53,7 +54,7 @@ struct HostDetailView: View {
                 toggleStats: { showStats.toggle() },
                 statsShown: showStats))
             .inspector(isPresented: $showStats) {
-                StatsInspector(store: store, selection: selection, onEdit: { editing = $0 }, onAutomate: { automating = $0 })
+                StatsInspector(store: store, selection: selection, onEdit: { editing = $0 }, onAutomate: { automating = $0 }, onHistory: { showingHistory = $0 })
                     .inspectorColumnWidth(min: 250, ideal: 290, max: 420)
             }
             #if DEBUG
@@ -79,6 +80,11 @@ struct HostDetailView: View {
                     automating = vms.first { $0.displayName == name }
                     UserDefaults.standard.removeObject(forKey: "VMDeckAutomate")
                 }
+                // `--args -VMDeckHistory "Name"` opens a VM's History sheet.
+                if showingHistory == nil, let name = UserDefaults.standard.string(forKey: "VMDeckHistory") {
+                    showingHistory = vms.first { $0.displayName == name }
+                    UserDefaults.standard.removeObject(forKey: "VMDeckHistory")
+                }
                 // `--args -VMDeckEdit "Name"` opens the resource editor (read-only until Apply).
                 if editing == nil, let name = UserDefaults.standard.string(forKey: "VMDeckEdit") {
                     editing = vms.first { $0.displayName == name }
@@ -96,6 +102,9 @@ struct HostDetailView: View {
             }
             .sheet(item: $automating) { vm in
                 AutomationSheet(vm: vm, store: store)
+            }
+            .sheet(item: $showingHistory) { vm in
+                HistorySheet(vm: vm, store: store)
             }
             .sheet(item: $editing) { vm in
                 EditResourcesSheet(vm: vm, store: store)
