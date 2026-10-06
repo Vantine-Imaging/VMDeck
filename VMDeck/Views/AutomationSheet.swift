@@ -10,6 +10,7 @@ struct AutomationSheet: View {
     @State private var loadError: String?
     @State private var startAtLogin = false
     @State private var scheduled = false
+    @State private var powerCycle = false
     @State private var time = Calendar.current.date(bySettingHour: 3, minute: 0, second: 0, of: .now) ?? .now
     @State private var weekdays: Set<Int> = Set(0...6)
     @State private var working = false
@@ -20,7 +21,7 @@ struct AutomationSheet: View {
 
     private var draftSchedule: RestartSchedule {
         let parts = Calendar.current.dateComponents([.hour, .minute], from: time)
-        return RestartSchedule(hour: parts.hour ?? 0, minute: parts.minute ?? 0, weekdays: weekdays, enabled: scheduled)
+        return RestartSchedule(hour: parts.hour ?? 0, minute: parts.minute ?? 0, weekdays: weekdays, enabled: scheduled, powerCycle: powerCycle)
     }
 
     private var savedSchedule: RestartSchedule? { status?.restarts.schedules[vm.id] }
@@ -82,7 +83,9 @@ struct AutomationSheet: View {
         .confirmationDialog("Restart \(vm.displayName) now?", isPresented: $confirmingRestart) {
             Button("Restart", role: .destructive) { Task { await restartNow() } }
         } message: {
-            Text("The guest is asked to restart. If it can't, VMDeck shuts it down, waiting up to \(waitMinutes) min before powering off, then starts it again. Unsaved work in the VM may be lost.")
+            Text(powerCycle
+                 ? "VMDeck shuts the VM down, waiting up to \(waitMinutes) min before powering off, then starts it again. Unsaved work in the VM may be lost."
+                 : "The guest is asked to restart. If it can't, VMDeck shuts it down, waiting up to \(waitMinutes) min before powering off, then starts it again. Unsaved work in the VM may be lost.")
         }
     }
 
@@ -128,16 +131,26 @@ struct AutomationSheet: View {
                 }
             }
             .disabled(!scheduled)
+            Picker("Method", selection: $powerCycle) {
+                Text("Restart the guest").tag(false)
+                Text("Power cycle the VM").tag(true)
+            }
+            .pickerStyle(.radioGroup)
+            .disabled(!scheduled)
         } header: {
             Text("Scheduled Restart")
         } footer: {
             VStack(alignment: .leading, spacing: 4) {
                 if scheduled, let next = draftSchedule.nextRun() {
-                    Text("Next restart: \(next.formatted(date: .abbreviated, time: .shortened)), in \(host.name)'s local time.")
+                    Text("Next \(powerCycle ? "power cycle" : "restart"): \(next.formatted(date: .abbreviated, time: .shortened)), in \(host.name)'s local time.")
                 } else if scheduled {
                     Text("Pick at least one day.")
                 }
-                Text("At that time the guest is asked to restart through VMware Tools. If it can't, the VM is shut down (up to \(waitMinutes) min, then powered off) and started again headless.")
+                if powerCycle {
+                    Text("The VM is shut down cleanly (up to \(waitMinutes) min, then powered off) and started again headless. That replaces the VM's process on the host, which frees memory it has accumulated, and picks up any settings changed since the last power-on. A few minutes of downtime.")
+                } else {
+                    Text("The guest is asked to restart through VMware Tools, like choosing Restart inside it; the VM's process on the host keeps running. If the guest can't, the VM is shut down (up to \(waitMinutes) min, then powered off) and started again headless.")
+                }
             }
         }
 
@@ -183,6 +196,7 @@ struct AutomationSheet: View {
             startAtLogin = s.autoStart.config.vmxPaths.contains(vm.id)
             if let mine = s.restarts.schedules[vm.id] {
                 scheduled = mine.enabled
+                powerCycle = mine.powerCycle
                 weekdays = mine.weekdays
                 time = Calendar.current.date(bySettingHour: mine.hour, minute: mine.minute, second: 0, of: .now) ?? time
             } else {

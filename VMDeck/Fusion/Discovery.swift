@@ -109,7 +109,7 @@ struct Discovery: Sendable {
     ///   OP    <etime> <args…>                               a running vmrun command
     ///   GUEST <path> <ip> <toolsState>                      Tools' published IP, per running VM
     ///   AUTO  <path>                                        in the host's auto-start list
-    ///   SCHED <hour> <minute> <days> <enabled> <path>       a saved restart schedule
+    ///   SCHED <hour> <minute> <days> <enabled> <mode> <path>  a saved restart schedule (mode: reboot|cycle)
     ///   ERR   <message>
     static func parse(_ output: String) -> Result {
         var running = Set<String>()
@@ -161,10 +161,10 @@ struct Discovery: Sendable {
                 guests[f[1]] = (f[2], f[3])
             case "AUTO" where f.count >= 2:
                 autoStart.insert(f[1])
-            case "SCHED" where f.count >= 6:
+            case "SCHED" where f.count >= 7:
                 let days = Set(f[3].split(separator: ",").compactMap { Int($0) }.filter { (0...6).contains($0) })
-                schedules[f[5]] = RestartSchedule(hour: Int(f[1]) ?? 0, minute: Int(f[2]) ?? 0,
-                                                  weekdays: days, enabled: f[4] == "1")
+                schedules[f[6]] = RestartSchedule(hour: Int(f[1]) ?? 0, minute: Int(f[2]) ?? 0,
+                                                  weekdays: days, enabled: f[4] == "1", powerCycle: f[5] == "cycle")
             case "OP" where f.count >= 3:
                 operations.append((f[2...].joined(separator: "\t"), parseElapsed(f[1]) ?? 0))
             case "NET" where f.count >= 3:
@@ -324,8 +324,9 @@ struct Discovery: Sendable {
       [ -n "$p" ] && c=$(canon "$p") && printf 'AUTO\t%s\n' "$c"
     done
     rl="$HOME/Library/Application Support/VMDeck/restart.list"
-    [ -f "$rl" ] && tail -n +3 "$rl" | while IFS="$(printf '\t')" read -r hour minute days enabled p; do
-      [ -n "$p" ] && c=$(canon "$p") && printf 'SCHED\t%s\t%s\t%s\t%s\t%s\n' "$hour" "$minute" "$days" "$enabled" "$c"
+    [ -f "$rl" ] && tail -n +3 "$rl" | while IFS="$(printf '\t')" read -r hour minute days enabled mode p; do
+      [ -z "$p" ] && { p=$mode; mode=reboot; }
+      [ -n "$p" ] && c=$(canon "$p") && printf 'SCHED\t%s\t%s\t%s\t%s\t%s\t%s\n' "$hour" "$minute" "$days" "$enabled" "$mode" "$c"
     done
     ps -Ao etime=,args= | grep -E '[v]mrun -T fusion (start|stop|suspend|reset) ' | while read -r et args; do
       printf 'OP\t%s\t%s\n' "$et" "$(printf '%s' "$args" | tr '\t' ' ')"

@@ -31,7 +31,7 @@ struct VMTable: View {
                             Image(systemName: "clock.arrow.2.circlepath")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                                .help("Restarts \(s.sentenceLabel) (host's local time)")
+                                .help("\(s.verb) \(s.sentenceLabel) (host's local time)")
                         }
                     }
                     Text(vm.vmxPath)

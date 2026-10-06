@@ -12,7 +12,7 @@ struct AutomationStatus: Equatable, Sendable {
     func summary(for vmxPath: String) -> String {
         var parts: [String] = []
         if autoStart.config.vmxPaths.contains(vmxPath) { parts.append("Starts at login") }
-        if let s = restarts.schedules[vmxPath], s.enabled { parts.append("Restarts \(s.sentenceLabel)") }
+        if let s = restarts.schedules[vmxPath], s.enabled { parts.append("\(s.verb) \(s.sentenceLabel)") }
         return parts.isEmpty ? "Off" : parts.joined(separator: ", ")
     }
 }

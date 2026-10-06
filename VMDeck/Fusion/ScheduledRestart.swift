@@ -8,6 +8,12 @@ struct RestartSchedule: Equatable, Sendable {
     /// 0 = Sunday … 6 = Saturday, as launchd counts them.
     var weekdays: Set<Int> = Set(0...6)
     var enabled = true
+    /// Shut down and start again (a fresh vmware-vmx process) instead of
+    /// asking the guest to restart. Slower, but it also resets whatever the
+    /// host process has accumulated.
+    var powerCycle = false
+
+    var verb: String { powerCycle ? "Power cycles" : "Restarts" }
 
     static let dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
@@ -109,7 +115,7 @@ struct ScheduledRestartManager: Sendable {
                     vmrun.vmrunPath, String(shutdownWaitSeconds), "1", Self.runnerScript]
         for (path, s) in schedules.sorted(by: { $0.key < $1.key }) {
             argv += [String(s.hour), String(s.minute), s.weekdays.sorted().map(String.init).joined(separator: ","),
-                     s.enabled ? "1" : "0", path]
+                     s.enabled ? "1" : "0", s.powerCycle ? "cycle" : "reboot", path]
         }
         let result = try await vmrun.runner.run(argv, timeout: .seconds(60))
         try VMRun.check(result)
@@ -130,10 +136,10 @@ struct ScheduledRestartManager: Sendable {
             switch f[0] {
             case "WAIT" where f.count >= 2:
                 status.shutdownWaitSeconds = Int(f[1]) ?? status.shutdownWaitSeconds
-            case "SCHED" where f.count >= 6:
+            case "SCHED" where f.count >= 7:
                 let days = Set(f[3].split(separator: ",").compactMap { Int($0) }.filter { (0...6).contains($0) })
-                status.schedules[f[5]] = RestartSchedule(hour: Int(f[1]) ?? 0, minute: Int(f[2]) ?? 0,
-                                                         weekdays: days, enabled: f[4] == "1")
+                status.schedules[f[6]] = RestartSchedule(hour: Int(f[1]) ?? 0, minute: Int(f[2]) ?? 0,
+                                                         weekdays: days, enabled: f[4] == "1", powerCycle: f[5] == "cycle")
             case "LOADED" where f.count >= 2:
                 status.loaded.insert(f[1])
             case "LOG":
@@ -167,15 +173,21 @@ struct ScheduledRestartManager: Sendable {
     : "${WAIT:=600}"
     [ -x "$VMRUN" ] || { echo "$(stamp) $name: vmrun not found at $VMRUN"; exit 1; }
     running() { "$VMRUN" -T fusion list 2>/dev/null | grep -qxF "$vmx"; }
+    # Records are: hour minute days enabled [mode] vmx; mode is "cycle" or "reboot".
+    mode=$(awk -F'\t' -v v="$vmx" 'NR > 2 && $NF == v { print (NF >= 6 ? $5 : "reboot") }' "$LIST" | tail -1)
     tmp=$(mktemp -t vmdeck-restart) || exit 1
     trap 'rm -f "$tmp"' EXIT
-    echo "$(stamp) $name: scheduled restart"
+    if [ "$mode" = cycle ]; then echo "$(stamp) $name: scheduled power cycle"; else echo "$(stamp) $name: scheduled restart"; fi
     if ! running; then echo "$(stamp) $name: not running, skipped"; exit 0; fi
     # Output to a file, never $(…): vmware-vmx holds vmrun's stdout open.
-    if "$VMRUN" -T fusion reset "$vmx" soft >"$tmp" 2>&1 </dev/null; then
-      echo "$(stamp) $name: guest restarted"; exit 0
+    if [ "$mode" != cycle ]; then
+      if "$VMRUN" -T fusion reset "$vmx" soft >"$tmp" 2>&1 </dev/null; then
+        echo "$(stamp) $name: guest restarted"; exit 0
+      fi
+      echo "$(stamp) $name: guest can't restart itself ($(tr '\n' ' ' <"$tmp")); shutting down instead"
+    else
+      echo "$(stamp) $name: shutting down for a fresh VM process"
     fi
-    echo "$(stamp) $name: guest can't restart itself ($(tr '\n' ' ' <"$tmp")); shutting down instead"
     "$VMRUN" -T fusion stop "$vmx" soft >"$tmp" 2>&1 </dev/null &
     stopper=$!
     waited=0
@@ -196,7 +208,7 @@ struct ScheduledRestartManager: Sendable {
     """#
 
     /// $1 vmrun, $2 shutdown wait, $3 "1" to touch launchctl, $4 runner text,
-    /// then records of 5: hour minute days enabled vmx. Rewrites everything.
+    /// then records of 6: hour minute days enabled mode vmx. Rewrites everything.
     static let installScript = #"""
     VMRUN=$1 WAIT=$2 LAUNCHCTL=$3 RUNNER=$4; shift 4
     PREFIX="com.vantine.vmdeck.restart."
@@ -212,10 +224,10 @@ struct ScheduledRestartManager: Sendable {
       rm -f "$old"
     done
     { printf '%s\n%s\n' "$VMRUN" "$WAIT"
-      while [ $# -ge 5 ]; do printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5"; shift 5; done; } > "$LIST"
+      while [ $# -ge 6 ]; do printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" "$6"; shift 6; done; } > "$LIST"
     printf '%s\n' "$RUNNER" > "$SCRIPT"; chmod 755 "$SCRIPT"
     count=0
-    tail -n +3 "$LIST" | while IFS="$(printf '\t')" read -r hour minute days enabled vmx; do
+    tail -n +3 "$LIST" | while IFS="$(printf '\t')" read -r hour minute days enabled mode vmx; do
       [ "$enabled" = 1 ] && [ -n "$days" ] || continue
       id=$(printf '%s' "$vmx" | cksum | cut -d' ' -f1)
       plist="$AGENTS/$PREFIX$id.plist"
@@ -244,8 +256,9 @@ struct ScheduledRestartManager: Sendable {
     LOG="$HOME/Library/Logs/VMDeck/restart.log"
     if [ -f "$LIST" ]; then
       { read -r _; read -r w; } < "$LIST"; printf 'WAIT\t%s\n' "$w"
-      tail -n +3 "$LIST" | while IFS="$(printf '\t')" read -r hour minute days enabled vmx; do
-        [ -n "$vmx" ] && printf 'SCHED\t%s\t%s\t%s\t%s\t%s\n' "$hour" "$minute" "$days" "$enabled" "$vmx"
+      tail -n +3 "$LIST" | while IFS="$(printf '\t')" read -r hour minute days enabled mode vmx; do
+        [ -z "$vmx" ] && { vmx=$mode; mode=reboot; }   # lists written before the mode field
+        [ -n "$vmx" ] && printf 'SCHED\t%s\t%s\t%s\t%s\t%s\t%s\n' "$hour" "$minute" "$days" "$enabled" "$mode" "$vmx"
       done
     fi
     for p in "$HOME/Library/LaunchAgents/$PREFIX"*.plist; do

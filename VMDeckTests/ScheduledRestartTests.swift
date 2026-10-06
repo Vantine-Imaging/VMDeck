@@ -42,15 +42,15 @@ private final class Token {}
     @Test func parsesStatus() {
         let out = """
         WAIT\t300
-        SCHED\t3\t0\t0\t1\t/a/A.vmx
-        SCHED\t22\t30\t1,2,3,4,5\t0\t/b/B.vmx
+        SCHED\t3\t0\t0\t1\treboot\t/a/A.vmx
+        SCHED\t22\t30\t1,2,3,4,5\t0\tcycle\t/b/B.vmx
         LOADED\t12345
         LOG\t2026-10-02 03:00:01 A: guest restarted
         """
         let s = ScheduledRestartManager.parseStatus(out)
         #expect(s.shutdownWaitSeconds == 300)
         #expect(s.schedules["/a/A.vmx"] == RestartSchedule(hour: 3, minute: 0, weekdays: [0], enabled: true))
-        #expect(s.schedules["/b/B.vmx"] == RestartSchedule(hour: 22, minute: 30, weekdays: Set(1...5), enabled: false))
+        #expect(s.schedules["/b/B.vmx"] == RestartSchedule(hour: 22, minute: 30, weekdays: Set(1...5), enabled: false, powerCycle: true))
         #expect(s.loaded == ["12345"])
         #expect(s.recentLog.hasSuffix("A: guest restarted"))
     }
@@ -93,7 +93,7 @@ private final class Token {}
                     ScheduledRestartManager.runnerScript]
         for (path, s) in schedules.sorted(by: { $0.key < $1.key }) {
             argv += [String(s.hour), String(s.minute), s.weekdays.sorted().map(String.init).joined(separator: ","),
-                     s.enabled ? "1" : "0", path]
+                     s.enabled ? "1" : "0", s.powerCycle ? "cycle" : "reboot", path]
         }
         let r = try await runner.run(argv, timeout: .seconds(20))
         try VMRun.check(r)
@@ -149,8 +149,9 @@ private final class Token {}
         let noTools = try makeVM("NoTools", extra: "fake.resetFails = \"TRUE\"\n")
         let stuck = try makeVM("Stuck", extra: "fake.resetFails = \"TRUE\"\nfake.softStopHangs = \"TRUE\"\n")
         let off = try makeVM("Off")
-        for vmx in [polite, noTools, stuck] { try await vmrun.start(vmx) }
-        _ = try await install([polite: RestartSchedule()], wait: 6)
+        let cycle = try makeVM("Cycle")
+        for vmx in [polite, noTools, stuck, cycle] { try await vmrun.start(vmx) }
+        _ = try await install([polite: RestartSchedule(), cycle: RestartSchedule(powerCycle: true)], wait: 6)
 
         var log = try await runRestart(polite)
         #expect(log.contains("Polite: guest restarted"))
@@ -173,6 +174,15 @@ private final class Token {}
         log = try await runRestart(off)
         #expect(log.contains("Off: not running, skipped"))
         #expect(!(try await vmrun.list()).contains(off))
+
+        // Power cycle: no guest restart attempt, straight to shutdown and start.
+        log = try await runRestart(cycle)
+        #expect(log.contains("Cycle: scheduled power cycle"))
+        #expect(log.contains("Cycle: shutting down for a fresh VM process"))
+        #expect(log.contains("Cycle: shut down cleanly"))
+        #expect(log.contains("Cycle: started"))
+        #expect(!log.contains("Cycle: guest restarted"))
+        #expect(try await vmrun.list().contains(cycle))
     }
 }
 
@@ -192,7 +202,7 @@ private final class Token {}
         #expect(!s.autoStart.installed)
         #expect(s.autoStart.config == AutoStartConfig(vmxPaths: ["/a/A.vmx"], waitSeconds: 600, staggerSeconds: 15))
         #expect(s.restarts.shutdownWaitSeconds == 300)
-        #expect(s.restarts.schedules["/a/A.vmx"] == RestartSchedule(hour: 3, minute: 0, weekdays: [0, 6]))
+        #expect(s.restarts.schedules["/a/A.vmx"] == RestartSchedule(hour: 3, minute: 0, weekdays: [0, 6]))   // old 5-field list reads as "reboot"
         #expect(s.summary(for: "/a/A.vmx") == "Starts at login, Restarts weekends at 3:00")
         #expect(s.summary(for: "/b/B.vmx") == "Off")
     }

@@ -69,7 +69,7 @@ struct VirtualMachine: Identifiable, Equatable, Sendable {
     var automationLabel: String {
         var parts: [String] = []
         if autoStart { parts.append("Starts at login") }
-        if let s = restartSchedule, s.enabled { parts.append("Restarts \(s.sentenceLabel)") }
+        if let s = restartSchedule, s.enabled { parts.append("\(s.verb) \(s.sentenceLabel)") }
         return parts.isEmpty ? "Off" : parts.joined(separator: ", ")
     }
 
