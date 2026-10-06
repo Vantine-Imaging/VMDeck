@@ -17,8 +17,7 @@ struct HostDetailView: View {
     @State private var showAutomation = false
     @State private var automating: VirtualMachine?
     @State private var showingHistory: VirtualMachine?
-    @State private var showingUsage = false
-    @State private var usageVM: VirtualMachine?
+    @State private var usageTarget: UsageTarget?
 
     var body: some View {
         content
@@ -57,7 +56,7 @@ struct HostDetailView: View {
                 statsShown: showStats))
             .inspector(isPresented: $showStats) {
                 StatsInspector(store: store, selection: selection, onEdit: { editing = $0 }, onAutomate: { automating = $0 }, onHistory: { showingHistory = $0 },
-                               onUsage: { usageVM = $0; showingUsage = true })
+                               onUsage: { usageTarget = UsageTarget(vm: $0) })
                     .inspectorColumnWidth(min: 250, ideal: 290, max: 420)
             }
             #if DEBUG
@@ -84,9 +83,8 @@ struct HostDetailView: View {
                     UserDefaults.standard.removeObject(forKey: "VMDeckAutomate")
                 }
                 // `--args -VMDeckUsage "Name"` opens a VM's Usage sheet ("host" for the host alone).
-                if !showingUsage, let name = UserDefaults.standard.string(forKey: "VMDeckUsage") {
-                    usageVM = vms.first { $0.displayName == name }
-                    showingUsage = true
+                if usageTarget == nil, let name = UserDefaults.standard.string(forKey: "VMDeckUsage") {
+                    usageTarget = UsageTarget(vm: vms.first { $0.displayName == name })
                     UserDefaults.standard.removeObject(forKey: "VMDeckUsage")
                 }
                 // `--args -VMDeckHistory "Name"` opens a VM's History sheet.
@@ -115,8 +113,8 @@ struct HostDetailView: View {
             .sheet(item: $showingHistory) { vm in
                 HistorySheet(vm: vm, store: store)
             }
-            .sheet(isPresented: $showingUsage) {
-                UsageSheet(vm: usageVM, store: store)
+            .sheet(item: $usageTarget) { target in
+                UsageSheet(vm: target.vm, store: store)
             }
             .sheet(item: $editing) { vm in
                 EditResourcesSheet(vm: vm, store: store)
@@ -174,6 +172,12 @@ struct HostDetailView: View {
             }
         }
     }
+}
+
+/// What the Usage sheet is about: a VM, or the host alone (nil).
+struct UsageTarget: Identifiable {
+    var vm: VirtualMachine?
+    var id: String { vm?.id ?? "host" }
 }
 
 struct AddVMPathSheet: View {

@@ -14,6 +14,8 @@ struct UsageSheet: View {
     @State private var range: UsageRange = .day
     @State private var working = false
     @State private var message: String?
+    /// Shared across the charts, so the crosshair lines up in all of them.
+    @State private var hoverDate: Date?
 
     private var host: Host { store.host }
     private var title: String { vm.map { "Usage: \($0.displayName)" } ?? "Usage: \(host.name)" }
@@ -49,6 +51,9 @@ struct UsageSheet: View {
                                         AreaMark(x: .value("Time", s.date), y: .value("CPU", min(s.cpuPercent / Double(vcpus), 100)))
                                             .interpolationMethod(.monotone)
                                             .foregroundStyle(.linearGradient(colors: [.accentColor.opacity(0.25), .clear], startPoint: .top, endPoint: .bottom))
+                                        if let h = nearest(series.vm, to: hoverDate, by: \.date) {
+                                            crosshair(at: h.date, label: "\(Int((min(h.cpuPercent / Double(vcpus), 100)).rounded()))%")
+                                        }
                                     }
                                     .chartYScale(domain: 0...100)
                                     .chartYAxis { AxisMarks(values: [0, 25, 50, 75, 100]) { v in
@@ -59,6 +64,9 @@ struct UsageSheet: View {
                                         LineMark(x: .value("Time", s.date), y: .value("Memory", Double(s.residentBytes) / 1_073_741_824))
                                             .interpolationMethod(.monotone)
                                             .foregroundStyle(.purple)
+                                        if let h = nearest(series.vm, to: hoverDate, by: \.date) {
+                                            crosshair(at: h.date, label: Format.bytes(h.residentBytes))
+                                        }
                                     }
                                     .chartYAxis { AxisMarks { v in
                                         AxisGridLine(); AxisValueLabel { if let d = v.as(Double.self) { Text("\(d.formatted(.number.precision(.fractionLength(0...1)))) GB") } } } }
@@ -73,6 +81,9 @@ struct UsageSheet: View {
                                         RuleMark(y: .value("Cores", Double(cores)))
                                             .foregroundStyle(.secondary.opacity(0.4))
                                             .lineStyle(StrokeStyle(dash: [4, 4]))
+                                    }
+                                    if let h = nearest(series.host, to: hoverDate, by: \.date) {
+                                        crosshair(at: h.date, label: "load \(Format.load(h.load1))")
                                     }
                                 }
                             }
@@ -90,6 +101,11 @@ struct UsageSheet: View {
                                         RuleMark(y: .value("Total", Double(total) / 1_073_741_824))
                                             .foregroundStyle(.secondary.opacity(0.4))
                                             .lineStyle(StrokeStyle(dash: [4, 4]))
+                                    }
+                                    if let h = nearest(series.host, to: hoverDate, by: \.date) {
+                                        crosshair(at: h.date, label: h.swapUsedBytes > 0
+                                                  ? "\(Format.bytes(h.memoryUsedBytes)) used, \(Format.bytes(h.swapUsedBytes)) swap"
+                                                  : "\(Format.bytes(h.memoryUsedBytes)) used")
                                     }
                                 }
                                 .chartForegroundStyleScale(["Used": Color.teal, "Swap": Color.red])
@@ -141,7 +157,7 @@ struct UsageSheet: View {
         .frame(width: 720)
         .frame(minHeight: 480, idealHeight: 720, maxHeight: 900)
         .disabled(working)
-        .task(id: range) { await load() }
+        .task(id: "\(range.rawValue)|\(vm?.id ?? "")") { await load() }
     }
 
     private var notRecording: some View {
@@ -173,8 +189,54 @@ struct UsageSheet: View {
             } else {
                 chart()
                     .chartXAxis { AxisMarks(values: .automatic(desiredCount: 6)) { _ in AxisGridLine(); AxisTick(); AxisValueLabel(format: xFormat) } }
+                    .chartOverlay { proxy in
+                        GeometryReader { geo in
+                            Rectangle().fill(.clear).contentShape(Rectangle())
+                                .onContinuousHover { phase in
+                                    switch phase {
+                                    case .active(let point):
+                                        let plot = geo[proxy.plotFrame!]
+                                        hoverDate = plot.contains(point) ? proxy.value(atX: point.x - plot.origin.x, as: Date.self) : nil
+                                    case .ended:
+                                        hoverDate = nil
+                                    }
+                                }
+                        }
+                    }
                     .frame(height: 150)
             }
+        }
+    }
+
+    /// The sample closest to the hovered time, if the pointer is over a chart.
+    private func nearest<T>(_ items: [T], to date: Date?, by key: KeyPath<T, Date>) -> T? {
+        guard let date, !items.isEmpty else { return nil }
+        let best = items.min { abs($0[keyPath: key].timeIntervalSince(date)) < abs($1[keyPath: key].timeIntervalSince(date)) }
+        // Don't point at a sample from another day when hovering a gap.
+        guard let best, abs(best[keyPath: key].timeIntervalSince(date)) <= Double(range.bucketSeconds) * 2 else { return nil }
+        return best
+    }
+
+    /// A vertical line at `date` with the value above it.
+    @ChartContentBuilder
+    private func crosshair(at date: Date, label: String) -> some ChartContent {
+        RuleMark(x: .value("Time", date))
+            .foregroundStyle(.secondary.opacity(0.6))
+            .lineStyle(StrokeStyle(lineWidth: 1))
+            .annotation(position: .top, alignment: .center, spacing: 2,
+                        overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
+                Text("\(date.formatted(hoverFormat))  \(label)")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .padding(.horizontal, 6).padding(.vertical, 3)
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 5))
+            }
+    }
+
+    private var hoverFormat: Date.FormatStyle {
+        switch range {
+        case .hour, .day: .dateTime.hour().minute()
+        case .week, .month: .dateTime.month(.abbreviated).day().hour().minute()
         }
     }
 

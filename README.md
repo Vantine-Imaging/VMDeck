@@ -137,7 +137,9 @@ interval per chosen day, in the host's local time) running
 `~/Library/Application Support/VMDeck/restart.sh`. At the scheduled time the
 script asks the guest to restart through VMware Tools; if the guest can't, it
 shuts the VM down (bounded wait, then Power Off) and starts it headless again.
-VMs that aren't running are left alone. Everything is logged to
+A schedule can instead **power cycle** the VM every time, which replaces its
+process on the host (freeing memory that process has accumulated) at the cost
+of a few minutes' downtime. VMs that aren't running are left alone. Everything is logged to
 `~/Library/Logs/VMDeck/restart.log`. **Restart Now** runs the same steps
 immediately.
 
@@ -164,8 +166,9 @@ are the guest crash-looping at startup.
 
 **History > Usage** charts a VM's CPU (as a share of its vCPUs) and the
 memory its process holds on the host, plus the host's load average and
-memory, over the last hour, 24 hours, 7 days, or 30 days. The host's own
-entry in the stats panel has the same button for the host alone.
+memory, over the last hour, 24 hours, 7 days, or 30 days. Hover over a chart
+to read the value at that moment. The host's own entry in the stats panel has
+the same button for the host alone.
 
 Because VMDeck isn't always running, the samples come from a **recorder**
 on the host that VMDeck installs when you click Start Recording: a per-user
