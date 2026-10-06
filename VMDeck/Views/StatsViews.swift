@@ -110,13 +110,16 @@ struct StatsInspector: View {
                     Text(target.help).font(.caption).foregroundStyle(.secondary)
                 }
             }
-            LabeledContent("Automation") {
-                VStack(alignment: .trailing, spacing: 6) {
-                    Text(vm.automationLabel)
-                        .multilineTextAlignment(.trailing)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("Automation")
+                    Spacer()
                     Button("Edit", systemImage: "clock.badge.checkmark") { onAutomate(vm) }
                         .help("Start this VM at login, or restart it on a schedule")
                 }
+                Text(vm.automationLabel)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
             LabeledContent("History") {
                 HStack(spacing: 8) {
