@@ -125,6 +125,7 @@ private final class Token {}
         let plist = agents.appending(path: "\(ScheduledRestartManager.labelPrefix)\(ScheduledRestartManager.id(for: a)).plist")
         let dict = try #require(NSDictionary(contentsOf: plist))
         #expect((dict["ProgramArguments"] as? [String]) == ["/bin/sh", home.appending(path: "Library/Application Support/VMDeck/restart.sh").path, a])
+        #expect(dict["AbandonProcessGroup"] as? Bool == true)
         let intervals = try #require(dict["StartCalendarInterval"] as? [[String: Int]])
         #expect(intervals == [["Hour": 3, "Minute": 15, "Weekday": 0], ["Hour": 3, "Minute": 15, "Weekday": 3]])
         let files = try FileManager.default.contentsOfDirectory(atPath: agents.path).filter { $0.hasPrefix(ScheduledRestartManager.labelPrefix) }

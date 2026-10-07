@@ -225,7 +225,7 @@ struct ScheduledRestartManager: Sendable {
       fi
       echo "$(stamp) $name: suspended"
       sleep 3
-      if "$VMRUN" -T fusion start "$vmx" nogui >"$tmp" 2>&1 </dev/null; then
+      if perl -e 'use POSIX; POSIX::setsid(); exec @ARGV' -- "$VMRUN" -T fusion start "$vmx" nogui >"$tmp" 2>&1 </dev/null; then
         echo "$(stamp) $name: resumed"; exit 0
       fi
       echo "$(stamp) $name: RESUME FAILED: $(tr '\n' ' ' <"$tmp")"; exit 1
@@ -256,7 +256,8 @@ struct ScheduledRestartManager: Sendable {
     if ! running; then
       vmdeck_apply_pending "$vmx" | while IFS= read -r l; do echo "$(stamp) $name: applied setting $l"; done
     fi
-    if "$VMRUN" -T fusion start "$vmx" nogui >"$tmp" 2>&1 </dev/null; then
+    # Own session, so launchd's end-of-job signal to the process group misses the VM.
+    if perl -e 'use POSIX; POSIX::setsid(); exec @ARGV' -- "$VMRUN" -T fusion start "$vmx" nogui >"$tmp" 2>&1 </dev/null; then
       echo "$(stamp) $name: started"
     else
       echo "$(stamp) $name: START FAILED: $(tr '\n' ' ' <"$tmp")"; exit 1
@@ -296,7 +297,7 @@ struct ScheduledRestartManager: Sendable {
         printf '%s\n' "$days" | tr ',' '\n' | while read -r d; do
           [ -n "$d" ] && printf '\t\t<dict>\n\t\t\t<key>Hour</key><integer>%s</integer>\n\t\t\t<key>Minute</key><integer>%s</integer>\n\t\t\t<key>Weekday</key><integer>%s</integer>\n\t\t</dict>\n' "$hour" "$minute" "$d"
         done
-        printf '\t</array>\n\t<key>ProcessType</key>\n\t<string>Background</string>\n</dict>\n</plist>\n'
+        printf '\t</array>\n\t<key>ProcessType</key>\n\t<string>Background</string>\n\t<key>AbandonProcessGroup</key>\n\t<true/>\n</dict>\n</plist>\n'
       } > "$plist"
       plutil -lint "$plist" >/dev/null || { printf 'ERR\tWrote an invalid plist for %s\n' "$(basename "$vmx")"; exit 0; }
       [ "$LAUNCHCTL" = 1 ] && launchctl bootstrap "gui/$UID_" "$plist" >/dev/null 2>&1

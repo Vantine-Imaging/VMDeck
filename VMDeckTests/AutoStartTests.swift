@@ -117,6 +117,7 @@ private final class Token {}
         #expect(dict["Label"] as? String == AutoStartManager.label)
         #expect((dict["ProgramArguments"] as? [String])?.last == support.appending(path: "autostart.sh").path)
         #expect(dict["RunAtLoad"] as? Bool == true)
+        #expect(dict["AbandonProcessGroup"] as? Bool == true)
 
         // Status reads it back, and discovery marks the VMs.
         let status = AutoStartManager.parseStatus(

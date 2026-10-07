@@ -131,7 +131,9 @@ struct AutoStartManager: Sendable {
       # Output goes to a file, not $(…): vmware-vmx inherits vmrun's stdout
       # and would hold a pipe open until the VM stops.
       tmp=$(mktemp -t vmdeck-autostart) || tmp=/dev/null
-      "$VMRUN" -T fusion start "$vmx" nogui >"$tmp" 2>&1 </dev/null
+      # In its own session: launchd signals the job's process group when the
+      # script exits, and vmware-vmx must outlive the script.
+      perl -e 'use POSIX; POSIX::setsid(); exec @ARGV' -- "$VMRUN" -T fusion start "$vmx" nogui >"$tmp" 2>&1 </dev/null
       rc=$?
       if [ "$rc" -eq 0 ]; then echo "$name: started"; else echo "$name: FAILED: $(cat "$tmp" 2>/dev/null | tr '\n' ' ')"; fi
       [ "$tmp" != /dev/null ] && rm -f "$tmp"
@@ -176,6 +178,8 @@ struct AutoStartManager: Sendable {
     	<true/>
     	<key>ProcessType</key>
     	<string>Background</string>
+    	<key>AbandonProcessGroup</key>
+    	<true/>
     </dict>
     </plist>
     EOF
