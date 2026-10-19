@@ -14,8 +14,8 @@ struct UsageSheet: View {
     @State private var range: UsageRange = .day
     @State private var working = false
     @State private var message: String?
-    /// Shared across the charts, so the crosshair lines up in all of them.
-    @State private var hoverDate: Date?
+    /// When the series was loaded: the right edge of every chart's x axis.
+    @State private var loadedAt = Date()
 
     private var host: Host { store.host }
     private var title: String { vm.map { "Usage: \($0.displayName)" } ?? "Usage: \(host.name)" }
@@ -51,25 +51,23 @@ struct UsageSheet: View {
                                         AreaMark(x: .value("Time", s.date), y: .value("CPU", min(s.cpuPercent / Double(vcpus), 100)))
                                             .interpolationMethod(.monotone)
                                             .foregroundStyle(.linearGradient(colors: [.accentColor.opacity(0.25), .clear], startPoint: .top, endPoint: .bottom))
-                                        if let h = nearest(series.vm, to: hoverDate, by: \.date) {
-                                            crosshair(at: h.date, label: "\(Int((min(h.cpuPercent / Double(vcpus), 100)).rounded()))%")
-                                        }
                                     }
                                     .chartYScale(domain: 0...100)
                                     .chartYAxis { AxisMarks(values: [0, 25, 50, 75, 100]) { v in
-                                        AxisGridLine(); AxisValueLabel { if let d = v.as(Double.self) { Text("\(Int(d))%") } } } }
+                                        AxisGridLine(); AxisValueLabel { if let d = v.as(Double.self) { yLabel("\(Int(d))%") } } } }
+                                    .modifier(hover(series.vm, date: \.date) { [vcpus] h in
+                                        "\(Int((min(h.cpuPercent / Double(vcpus), 100)).rounded()))%"
+                                    })
                                 }
                                 chartSection("Host Memory", unit: "used by the VM's process", empty: series.vm.isEmpty) {
                                     Chart(series.vm) { s in
                                         LineMark(x: .value("Time", s.date), y: .value("Memory", Double(s.residentBytes) / 1_073_741_824))
                                             .interpolationMethod(.monotone)
                                             .foregroundStyle(.purple)
-                                        if let h = nearest(series.vm, to: hoverDate, by: \.date) {
-                                            crosshair(at: h.date, label: Format.bytes(h.residentBytes))
-                                        }
                                     }
                                     .chartYAxis { AxisMarks { v in
-                                        AxisGridLine(); AxisValueLabel { if let d = v.as(Double.self) { Text("\(d.formatted(.number.precision(.fractionLength(0...1)))) GB") } } } }
+                                        AxisGridLine(); AxisValueLabel { if let d = v.as(Double.self) { yLabel("\(d.formatted(.number.precision(.fractionLength(0...1)))) GB") } } } }
+                                    .modifier(hover(series.vm, date: \.date) { Format.bytes($0.residentBytes) })
                                 }
                             }
                             chartSection("\(host.name) Load", unit: "1-minute load average, \(store.hostStats?.cpuCount ?? 0) cores", empty: series.host.isEmpty) {
@@ -82,10 +80,10 @@ struct UsageSheet: View {
                                             .foregroundStyle(.secondary.opacity(0.4))
                                             .lineStyle(StrokeStyle(dash: [4, 4]))
                                     }
-                                    if let h = nearest(series.host, to: hoverDate, by: \.date) {
-                                        crosshair(at: h.date, label: "load \(Format.load(h.load1))")
-                                    }
                                 }
+                                .chartYAxis { AxisMarks { v in
+                                    AxisGridLine(); AxisValueLabel { if let d = v.as(Double.self) { yLabel(d.formatted(.number.precision(.fractionLength(0...1)))) } } } }
+                                .modifier(hover(series.host, date: \.date) { "load \(Format.load($0.load1))" })
                             }
                             chartSection("\(host.name) Memory", unit: "used (app, wired, compressed) and swap", empty: series.host.isEmpty) {
                                 Chart {
@@ -102,15 +100,15 @@ struct UsageSheet: View {
                                             .foregroundStyle(.secondary.opacity(0.4))
                                             .lineStyle(StrokeStyle(dash: [4, 4]))
                                     }
-                                    if let h = nearest(series.host, to: hoverDate, by: \.date) {
-                                        crosshair(at: h.date, label: h.swapUsedBytes > 0
-                                                  ? "\(Format.bytes(h.memoryUsedBytes)) used, \(Format.bytes(h.swapUsedBytes)) swap"
-                                                  : "\(Format.bytes(h.memoryUsedBytes)) used")
-                                    }
                                 }
                                 .chartForegroundStyleScale(["Used": Color.teal, "Swap": Color.red])
                                 .chartYAxis { AxisMarks { v in
-                                    AxisGridLine(); AxisValueLabel { if let d = v.as(Double.self) { Text("\(Int(d)) GB") } } } }
+                                    AxisGridLine(); AxisValueLabel { if let d = v.as(Double.self) { yLabel("\(Int(d)) GB") } } } }
+                                .modifier(hover(series.host, date: \.date) { h in
+                                    h.swapUsedBytes > 0
+                                        ? "\(Format.bytes(h.memoryUsedBytes)) used, \(Format.bytes(h.swapUsedBytes)) swap"
+                                        : "\(Format.bytes(h.memoryUsedBytes)) used"
+                                })
                             }
                         }
                         .padding(16)
@@ -188,49 +186,27 @@ struct UsageSheet: View {
                     .frame(height: 60)
             } else {
                 chart()
+                    .chartXScale(domain: xDomain)
                     .chartXAxis { AxisMarks(values: .automatic(desiredCount: 6)) { _ in AxisGridLine(); AxisTick(); AxisValueLabel(format: xFormat) } }
-                    .chartOverlay { proxy in
-                        GeometryReader { geo in
-                            Rectangle().fill(.clear).contentShape(Rectangle())
-                                .onContinuousHover { phase in
-                                    switch phase {
-                                    case .active(let point):
-                                        let plot = geo[proxy.plotFrame!]
-                                        hoverDate = plot.contains(point) ? proxy.value(atX: point.x - plot.origin.x, as: Date.self) : nil
-                                    case .ended:
-                                        hoverDate = nil
-                                    }
-                                }
-                        }
-                    }
                     .frame(height: 150)
             }
         }
     }
 
-    /// The sample closest to the hovered time, if the pointer is over a chart.
-    private func nearest<T>(_ items: [T], to date: Date?, by key: KeyPath<T, Date>) -> T? {
-        guard let date, !items.isEmpty else { return nil }
-        let best = items.min { abs($0[keyPath: key].timeIntervalSince(date)) < abs($1[keyPath: key].timeIntervalSince(date)) }
-        // Don't point at a sample from another day when hovering a gap.
-        guard let best, abs(best[keyPath: key].timeIntervalSince(date)) <= Double(range.bucketSeconds) * 2 else { return nil }
-        return best
+    /// The same span on every chart, so their time axes line up whichever
+    /// series has samples where.
+    private var xDomain: ClosedRange<Date> {
+        loadedAt.addingTimeInterval(-Double(range.seconds))...loadedAt
     }
 
-    /// A vertical line at `date` with the value above it.
-    @ChartContentBuilder
-    private func crosshair(at date: Date, label: String) -> some ChartContent {
-        RuleMark(x: .value("Time", date))
-            .foregroundStyle(.secondary.opacity(0.6))
-            .lineStyle(StrokeStyle(lineWidth: 1))
-            .annotation(position: .top, alignment: .center, spacing: 2,
-                        overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
-                Text("\(date.formatted(hoverFormat))  \(label)")
-                    .font(.caption)
-                    .monospacedDigit()
-                    .padding(.horizontal, 6).padding(.vertical, 3)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 5))
-            }
+    /// A y-axis label in a fixed-width frame, so every chart's plot area is
+    /// the same width and the time axes line up.
+    private func yLabel(_ text: String) -> some View {
+        Text(text).monospacedDigit().lineLimit(1).frame(width: 44, alignment: .leading)
+    }
+
+    private func hover<T>(_ items: [T], date: KeyPath<T, Date>, label: @escaping (T) -> String) -> ChartHover<T> {
+        ChartHover(items: items, date: date, maxGap: Double(range.bucketSeconds) * 2, format: hoverFormat, label: label)
     }
 
     private var hoverFormat: Date.FormatStyle {
@@ -258,7 +234,12 @@ struct UsageSheet: View {
 
     private func load() async {
         do {
-            series = try await store.usage(for: vm, range: range)
+            var loaded = try await store.usage(for: vm, range: range)
+            // The hover lookup binary-searches by date.
+            if !loaded.vm.isSorted(by: { $0.date <= $1.date }) { loaded.vm.sort { $0.date < $1.date } }
+            if !loaded.host.isSorted(by: { $0.date <= $1.date }) { loaded.host.sort { $0.date < $1.date } }
+            loadedAt = Date()
+            series = loaded
             loadError = nil
         } catch {
             loadError = error.localizedDescription
@@ -276,5 +257,95 @@ struct UsageSheet: View {
             message = "Couldn't change recording: \(error.localizedDescription)"
         }
         working = false
+    }
+}
+
+private extension Array {
+    /// True when each neighbouring pair satisfies `inOrder`.
+    func isSorted(by inOrder: (Element, Element) -> Bool) -> Bool {
+        zip(self, dropFirst()).allSatisfy { inOrder($0, $1) }
+    }
+}
+
+/// The hover crosshair for one chart: a vertical rule at the nearest sample
+/// with "time  value" in a pill above it. It lives in the chart's overlay with
+/// its own state, so moving the pointer redraws only this layer of the hovered
+/// chart, never the marks or the other charts.
+struct ChartHover<T>: ViewModifier {
+    let items: [T]
+    let date: KeyPath<T, Date>
+    /// Hovering further than this from any sample (a gap) shows nothing.
+    let maxGap: TimeInterval
+    let format: Date.FormatStyle
+    let label: (T) -> String
+
+    func body(content: Content) -> some View {
+        content.chartOverlay { proxy in
+            ChartHoverLayer(proxy: proxy, items: items, date: date, maxGap: maxGap, format: format, label: label)
+        }
+    }
+}
+
+private struct ChartHoverLayer<T>: View {
+    let proxy: ChartProxy
+    let items: [T]
+    let date: KeyPath<T, Date>
+    let maxGap: TimeInterval
+    let format: Date.FormatStyle
+    let label: (T) -> String
+
+    @State private var pointerX: CGFloat?
+
+    var body: some View {
+        GeometryReader { geo in
+            let plot = proxy.plotFrame.map { geo[$0] } ?? .zero
+            ZStack(alignment: .topLeading) {
+                Rectangle().fill(.clear).contentShape(Rectangle())
+                    .onContinuousHover { phase in
+                        switch phase {
+                        case .active(let point) where plot.contains(point): pointerX = point.x - plot.minX
+                        default: pointerX = nil
+                        }
+                    }
+                if let pointerX, let hit = nearest(toPlotX: pointerX), let x = proxy.position(forX: hit[keyPath: date]) {
+                    let lineX = plot.minX + x
+                    let plotTop = plot.minY
+                    Rectangle()
+                        .fill(.secondary.opacity(0.6))
+                        .frame(width: 1, height: plot.height)
+                        .offset(x: lineX - 0.5, y: plot.minY)
+                        .allowsHitTesting(false)
+                    Text("\(hit[keyPath: date].formatted(format))  \(label(hit))")
+                        .font(.caption)
+                        .monospacedDigit()
+                        .fixedSize()
+                        .padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 5))
+                        // Centred on the rule, kept within the plot's width (clear of the
+                        // y labels, whose top one sits at this height), just above the plot.
+                        .alignmentGuide(.leading) { d in -max(min(lineX - d.width / 2, plot.maxX - d.width), plot.minX) }
+                        .alignmentGuide(.top) { d in -(plotTop - 2 - d.height) }
+                        .allowsHitTesting(false)
+                }
+            }
+        }
+    }
+
+    /// The sample closest to the time under the pointer, by binary search
+    /// over the date-sorted samples.
+    private func nearest(toPlotX x: CGFloat) -> T? {
+        guard !items.isEmpty, let target = proxy.value(atX: x, as: Date.self) else { return nil }
+        var lo = 0, hi = items.count
+        while lo < hi {
+            let mid = (lo + hi) / 2
+            if items[mid][keyPath: date] < target { lo = mid + 1 } else { hi = mid }
+        }
+        let candidates = [lo - 1, lo].filter { items.indices.contains($0) }
+        guard let best = candidates.min(by: {
+            abs(items[$0][keyPath: date].timeIntervalSince(target)) < abs(items[$1][keyPath: date].timeIntervalSince(target))
+        }) else { return nil }
+        // Don't point at a sample from another day when hovering a gap.
+        guard abs(items[best][keyPath: date].timeIntervalSince(target)) <= maxGap else { return nil }
+        return items[best]
     }
 }
